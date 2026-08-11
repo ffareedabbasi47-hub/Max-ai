@@ -8,9 +8,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -195,7 +195,7 @@ private fun ReplyCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = if (reply.platform == "WHATSAPP") Icons.Default.Chat else Icons.Default.Email,
+                        imageVector = if (reply.platform == "WHATSAPP") Icons.AutoMirrored.Filled.Chat else Icons.Default.Email,
                         contentDescription = reply.platform,
                         tint = CyanPrimary,
                         modifier = Modifier.size(18.dp)

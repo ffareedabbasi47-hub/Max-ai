@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -70,7 +71,7 @@ fun SystemControlScreen(
             )
             ToggleCard(
                 title = "Silent Mode",
-                icon = Icons.Default.VolumeOff,
+                icon = Icons.AutoMirrored.Filled.VolumeOff,
                 onClick = { viewModel.executePrompt("mute phone") },
                 modifier = Modifier.weight(1f)
             )

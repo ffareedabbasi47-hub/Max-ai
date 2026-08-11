@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build & Verify Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -32,11 +32,23 @@ jobs:
             base64 -d debug.keystore.base64 > debug.keystore || true
           fi
 
+      - name: Run Unit Tests
+        run: gradle test --no-daemon --stacktrace
+
+      - name: Build Release APK
+        run: gradle assembleRelease --no-daemon --no-configuration-cache --stacktrace
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-JARVIS-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-JARVIS-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk

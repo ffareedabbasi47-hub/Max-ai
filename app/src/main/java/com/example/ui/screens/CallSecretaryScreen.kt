@@ -11,9 +11,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.PhoneCallback
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.PhoneCallback
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -79,7 +79,7 @@ fun CallSecretaryScreen(
 
                 if (dialNumber.isNotEmpty()) {
                     Icon(
-                        imageVector = Icons.Default.Backspace,
+                        imageVector = Icons.AutoMirrored.Filled.Backspace,
                         contentDescription = "Backspace",
                         tint = CyanPrimary,
                         modifier = Modifier.clickable {
@@ -156,7 +156,7 @@ fun CallSecretaryScreen(
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.PhoneCallback,
+                        imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
                         contentDescription = "Secretary",
                         tint = CyanPrimary,
                         modifier = Modifier.size(18.dp)
