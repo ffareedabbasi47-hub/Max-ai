@@ -1,5 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 import java.util.Base64
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -14,6 +15,22 @@ android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
+  fun getApiKey(key: String): String {
+    val envVal = System.getenv(key)
+    val properties = Properties()
+    val envFile = project.rootProject.file(".env")
+    if (envFile.exists()) {
+      try { envFile.inputStream().use { properties.load(it) } } catch (e: Exception) {}
+    }
+    val exampleFile = project.rootProject.file(".env.example")
+    if (exampleFile.exists()) {
+      try { exampleFile.inputStream().use { properties.load(it) } } catch (e: Exception) {}
+    }
+    val propVal = properties.getProperty(key, "DEFAULT_KEY")
+    val res = if (!envVal.isNullOrEmpty()) envVal else propVal
+    return if (res.isNullOrEmpty()) "DEFAULT_KEY" else res
+  }
+
   defaultConfig {
     applicationId = "com.aistudio.max.jarvis.hud"
     minSdk = 24
@@ -22,6 +39,9 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    val geminiKey = getApiKey("GEMINI_API_KEY")
+    buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
   }
 
   signingConfigs {
