@@ -75,8 +75,25 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             voiceEngine.speechRecognizedText.collect { text ->
                 if (text.isNotBlank()) {
-                    _userInputQuery.value = text
-                    executePrompt(text)
+                    val lower = text.lowercase().trim()
+                    if (lower == "max" || lower == "hey max" || lower == "hey max!" || lower == "max!") {
+                        val wakeAck = "Yes Boss? Boliyen, main sun raha hoon!"
+                        _lastSpeechText.value = wakeAck
+                        voiceEngine.speak(wakeAck)
+                    } else if (lower.startsWith("max ") || lower.startsWith("hey max ")) {
+                        val cleanQuery = text.replace(Regex("(?i)^(hey max|max)\\s*"), "").trim()
+                        if (cleanQuery.isNotEmpty()) {
+                            _userInputQuery.value = cleanQuery
+                            executePrompt(cleanQuery)
+                        } else {
+                            val wakeAck = "Yes Boss? Boliyen, main sun raha hoon!"
+                            _lastSpeechText.value = wakeAck
+                            voiceEngine.speak(wakeAck)
+                        }
+                    } else {
+                        _userInputQuery.value = text
+                        executePrompt(text)
+                    }
                 }
             }
         }
@@ -298,6 +315,19 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             dao.clearCommandLogs()
         }
+    }
+
+    fun getApiKeySlot(slotNumber: Int): String {
+        val prefs = getApplication<Application>().getSharedPreferences("max_jarvis_prefs", android.content.Context.MODE_PRIVATE)
+        return prefs.getString("api_key_slot_$slotNumber", "") ?: ""
+    }
+
+    fun saveApiKeySlot(slotNumber: Int, key: String) {
+        val prefs = getApplication<Application>().getSharedPreferences("max_jarvis_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString("api_key_slot_$slotNumber", key.trim()).apply()
+        val msg = "API Key Slot $slotNumber updated, Boss!"
+        _lastSpeechText.value = msg
+        voiceEngine.speak(msg)
     }
 
     override fun onCleared() {

@@ -48,7 +48,11 @@ fun SettingsScreen(
             fontFamily = FontFamily.Monospace
         )
 
-        // API Key Status Panel
+        // Multi-API Key Rotation Panel
+        var keySlot1 by remember { mutableStateOf(viewModel.getApiKeySlot(1)) }
+        var keySlot2 by remember { mutableStateOf(viewModel.getApiKeySlot(2)) }
+        var keySlot3 by remember { mutableStateOf(viewModel.getApiKeySlot(3)) }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -56,35 +60,70 @@ fun SettingsScreen(
                 .border(1.dp, HudBorderCyan, shape = RoundedCornerShape(12.dp))
                 .padding(12.dp)
         ) {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "AI BRAIN CORE INTEGRATION",
+                    text = "MULTI-API KEY ROTATION (LIMIT EXPANSION)",
                     color = CyanPrimary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(if (hasGeminiKey) NeonGreenStatus else NeonAmberAlert, shape = RoundedCornerShape(5.dp))
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (hasGeminiKey) "GEMINI 3.5 FLASH API ACTIVE (Cloud AI Engine)" else "STARK OFFLINE HYBRID BRAIN (Local Parsing Fallback Active)",
-                        color = TextCyanLight,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "API secrets are securely managed via AI Studio Secrets Panel and exposed via BuildConfig.GEMINI_API_KEY.",
+                    text = "Add up to 5 Gemini API Keys. MAX will automatically rotate to the next key if quota is exhausted!",
                     color = TextCyanMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
+                )
+
+                OutlinedTextField(
+                    value = keySlot1,
+                    onValueChange = {
+                        keySlot1 = it
+                        viewModel.saveApiKeySlot(1, it)
+                    },
+                    label = { Text("API Key Slot 1 (Primary)", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
+                )
+
+                OutlinedTextField(
+                    value = keySlot2,
+                    onValueChange = {
+                        keySlot2 = it
+                        viewModel.saveApiKeySlot(2, it)
+                    },
+                    label = { Text("API Key Slot 2 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
+                )
+
+                OutlinedTextField(
+                    value = keySlot3,
+                    onValueChange = {
+                        keySlot3 = it
+                        viewModel.saveApiKeySlot(3, it)
+                    },
+                    label = { Text("API Key Slot 3 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
                 )
             }
         }

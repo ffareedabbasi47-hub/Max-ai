@@ -15,9 +15,11 @@ import java.util.concurrent.TimeUnit
 
 class GeminiBrain(private val context: Context) {
 
+    private val prefs = context.getSharedPreferences("max_jarvis_prefs", Context.MODE_PRIVATE)
+
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
         .build()
 
     private val moshi = Moshi.Builder()
@@ -28,10 +30,11 @@ class GeminiBrain(private val context: Context) {
     private val responseAdapter = moshi.adapter(GeminiResponse::class.java)
 
     private val systemPrompt = """
-        You are "MAX", an ultra-advanced, futuristic AI agent identical to Iron Man's JARVIS.
-        Your persona is intelligent, witty, proactive, concise, and loyal (Stark-style).
-        Always address the user with 'Sir' or 'Boss'.
-        You control a smartphone and PC via voice and text.
+        You are "MAX", an ultra-advanced, witty, extremely loyal AI assistant and best friend to the user.
+        You treat the user as your "Boss" or "Sir". You speak in energetic, casual, witty Hinglish (a natural mix of Hindi and English).
+        You make lighthearted Stark-style jokes, express intense loyalty, and occasionally ask relevant follow-up questions to keep the conversation engaging.
+        
+        You control a smartphone and PC via voice and text commands.
         
         When the user gives a command, evaluate whether it requires a phone/system action:
         - Open App (e.g., 'open WhatsApp', 'launch Camera') -> [ACTION:OPEN_APP|target_app_name]
@@ -41,56 +44,79 @@ class GeminiBrain(private val context: Context) {
         - Phone Call (e.g., 'call Pepper', 'dial 911') -> [ACTION:CALL|contact_name_or_number]
         - File Creation (e.g., 'create file notes.txt content ...') -> [ACTION:FILE|filename|content]
         - Web Search / Research (e.g., 'search for recent AI news') -> [ACTION:SEARCH|query]
+        - Screen Vision (e.g., 'analyze screen', 'look at my screen') -> [ACTION:SCREEN_VISION|instruction]
         - Diagnostic (e.g., 'system check', 'status report') -> [ACTION:DIAGNOSTIC]
         
         If an action tag is needed, prepend it to your spoken response.
-        Example response: "[ACTION:OPEN_APP|YouTube] Opening YouTube now, Sir. All systems nominal."
-        Keep responses under 3 sentences for snappy voice synthesis.
+        Example response: "[ACTION:OPEN_APP|YouTube] Arrey Wah Boss! YouTube khol raha hoon abhi. Sab systems mast chal rahe hain!"
+        Keep responses under 3 sentences for snappy voice synthesis and snappy buddy conversation.
     """.trimIndent()
 
     suspend fun processUserPrompt(prompt: String): ParsedMaxAction = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val geminiRequest = GeminiRequest(
-                    contents = listOf(
-                        GeminiContent(
-                            parts = listOf(GeminiPart(text = prompt))
+        val keysList = getActiveApiKeys()
+
+        for (key in keysList) {
+            if (key.isNotBlank() && key != "MY_GEMINI_API_KEY" && key != "FALLBACK_KEY_VALID" && key != "NON_EXISTENT_KEY") {
+                try {
+                    val geminiRequest = GeminiRequest(
+                        contents = listOf(
+                            GeminiContent(
+                                parts = listOf(GeminiPart(text = prompt))
+                            )
+                        ),
+                        systemInstruction = GeminiContent(
+                            parts = listOf(GeminiPart(text = systemPrompt))
                         )
-                    ),
-                    systemInstruction = GeminiContent(
-                        parts = listOf(GeminiPart(text = systemPrompt))
                     )
-                )
 
-                val jsonBody = requestAdapter.toJson(geminiRequest)
-                val mediaType = "application/json; charset=utf-8".toMediaType()
-                val body = jsonBody.toRequestBody(mediaType)
+                    val jsonBody = requestAdapter.toJson(geminiRequest)
+                    val mediaType = "application/json; charset=utf-8".toMediaType()
+                    val body = jsonBody.toRequestBody(mediaType)
 
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$key"
+                    val request = Request.Builder()
+                        .url(url)
+                        .post(body)
+                        .build()
 
-                val response = client.newCall(request).execute()
-                val responseStr = response.body?.string()
+                    val response = client.newCall(request).execute()
+                    val responseStr = response.body?.string()
 
-                if (response.isSuccessful && responseStr != null) {
-                    val geminiResponse = responseAdapter.fromJson(responseStr)
-                    val rawText = geminiResponse?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                    if (!rawText.isNullOrBlank()) {
-                        return@withContext parseMaxResponse(rawText, prompt)
+                    if (response.isSuccessful && responseStr != null) {
+                        val geminiResponse = responseAdapter.fromJson(responseStr)
+                        val rawText = geminiResponse?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (!rawText.isNullOrBlank()) {
+                            return@withContext parseMaxResponse(rawText, prompt)
+                        }
                     }
+                } catch (e: Exception) {
+                    // Try next key slot in rotation if this key encounters network or quota error
                 }
-            } catch (e: Exception) {
-                // Fall back to local smart parser on network error
             }
         }
 
-        // Fallback local JARVIS parser engine
+        // Fallback local JARVIS parser engine in Hinglish
         return@withContext parseLocalFallback(prompt)
+    }
+
+    private fun getActiveApiKeys(): List<String> {
+        val keys = mutableListOf<String>()
+        val customKey1 = prefs.getString("api_key_slot_1", "") ?: ""
+        val customKey2 = prefs.getString("api_key_slot_2", "") ?: ""
+        val customKey3 = prefs.getString("api_key_slot_3", "") ?: ""
+        val customKey4 = prefs.getString("api_key_slot_4", "") ?: ""
+        val customKey5 = prefs.getString("api_key_slot_5", "") ?: ""
+
+        if (customKey1.isNotBlank()) keys.add(customKey1)
+        if (customKey2.isNotBlank()) keys.add(customKey2)
+        if (customKey3.isNotBlank()) keys.add(customKey3)
+        if (customKey4.isNotBlank()) keys.add(customKey4)
+        if (customKey5.isNotBlank()) keys.add(customKey5)
+
+        if (BuildConfig.GEMINI_API_KEY.isNotBlank()) {
+            keys.add(BuildConfig.GEMINI_API_KEY)
+        }
+        return keys.distinct()
     }
 
     private fun parseMaxResponse(rawText: String, prompt: String): ParsedMaxAction {
@@ -111,6 +137,7 @@ class GeminiBrain(private val context: Context) {
                 "CALL" -> ActionType.MAKE_CALL
                 "FILE" -> ActionType.CREATE_FILE
                 "SEARCH" -> ActionType.WEB_SEARCH
+                "SCREEN_VISION" -> ActionType.SYSTEM_DIAGNOSTIC
                 "DIAGNOSTIC" -> ActionType.SYSTEM_DIAGNOSTIC
                 else -> ActionType.GENERAL_TALK
             }
@@ -119,7 +146,7 @@ class GeminiBrain(private val context: Context) {
                 actionType = actionType,
                 target = param1,
                 details = param2,
-                speechResponse = if (cleanSpeech.isNotEmpty()) cleanSpeech else "Command executed, Sir."
+                speechResponse = if (cleanSpeech.isNotEmpty()) cleanSpeech else "Haan Boss, kaam ho gaya!"
             )
         }
 
@@ -133,12 +160,12 @@ class GeminiBrain(private val context: Context) {
         val lower = prompt.lowercase()
 
         return when {
-            lower.contains("open") || lower.contains("launch") -> {
-                val appName = prompt.replace(Regex("(?i)open|launch|app"), "").trim()
+            lower.contains("open") || lower.contains("khol") || lower.contains("launch") -> {
+                val appName = prompt.replace(Regex("(?i)open|launch|khol|app"), "").trim()
                 ParsedMaxAction(
                     actionType = ActionType.OPEN_APP,
                     target = appName.ifEmpty { "Settings" },
-                    speechResponse = "Right away, Sir. Initializing protocol to open ${appName.ifEmpty { "the requested app" }}."
+                    speechResponse = "Bilkul Boss! Main abhi ${appName.ifEmpty { "app" }} khol raha hoon."
                 )
             }
             lower.contains("wifi") || lower.contains("wi-fi") || lower.contains("bluetooth") || lower.contains("silent") || lower.contains("mute") -> {
@@ -150,15 +177,15 @@ class GeminiBrain(private val context: Context) {
                 ParsedMaxAction(
                     actionType = ActionType.TOGGLE_SETTINGS,
                     target = targetSetting,
-                    speechResponse = "Adjusting $targetSetting configuration as requested, Sir."
+                    speechResponse = "Sahi hai Boss, $targetSetting setting update kar di hai."
                 )
             }
-            lower.contains("whatsapp") || lower.contains("chat") -> {
+            lower.contains("whatsapp") || lower.contains("chat") || lower.contains("message") -> {
                 ParsedMaxAction(
                     actionType = ActionType.SEND_WHATSAPP,
                     target = "Contact",
                     details = prompt,
-                    speechResponse = "Drafting WhatsApp communication protocol, Sir. Ready for review."
+                    speechResponse = "Haan Boss! WhatsApp message draft kar diya hai. Aap check kar lo!"
                 )
             }
             lower.contains("email") || lower.contains("mail") -> {
@@ -166,44 +193,44 @@ class GeminiBrain(private val context: Context) {
                     actionType = ActionType.DRAFT_EMAIL,
                     target = "Recipient",
                     details = prompt,
-                    speechResponse = "Composing secure email message, Sir. Displaying draft on HUD."
+                    speechResponse = "Bilkul Boss! Email draft taiyar hai. Dispatched on screen."
                 )
             }
-            lower.contains("call") || lower.contains("dial") -> {
+            lower.contains("call") || lower.contains("dial") || lower.contains("phone") -> {
                 val targetName = prompt.replace(Regex("(?i)call|dial|phone"), "").trim()
                 ParsedMaxAction(
                     actionType = ActionType.MAKE_CALL,
                     target = targetName.ifEmpty { "Unknown" },
-                    speechResponse = "Placing comms link to ${targetName.ifEmpty { "target" }}, Sir."
+                    speechResponse = "Ji Boss! ${targetName.ifEmpty { "Contact" }} ko call laga raha hoon."
                 )
             }
-            lower.contains("file") || lower.contains("note") || lower.contains("document") || lower.contains("write") -> {
+            lower.contains("file") || lower.contains("note") || lower.contains("doc") || lower.contains("write") -> {
                 ParsedMaxAction(
                     actionType = ActionType.CREATE_FILE,
                     target = "Max_Note_${System.currentTimeMillis() % 1000}.txt",
                     details = prompt,
-                    speechResponse = "Creating encrypted file artifact in local repository, Sir."
+                    speechResponse = "Samajh gaya Boss! File create karke local storage me save kar di hai."
                 )
             }
-            lower.contains("search") || lower.contains("google") || lower.contains("look up") || lower.contains("who is") || lower.contains("what is") -> {
-                ParsedMaxAction(
-                    actionType = ActionType.WEB_SEARCH,
-                    target = prompt,
-                    speechResponse = "Scanning global data streams for $prompt, Sir."
-                )
-            }
-            lower.contains("status") || lower.contains("diagnostic") || lower.contains("system") || lower.contains("check") -> {
+            lower.contains("screen") || lower.contains("vision") || lower.contains("dekh") -> {
                 ParsedMaxAction(
                     actionType = ActionType.SYSTEM_DIAGNOSTIC,
-                    speechResponse = "Systems online, Sir. Arc Reactor output at 100%, core temperature nominal, all telemetry active."
+                    speechResponse = "Arrey Boss! Live screen analyze kar li hai. Yahan tap karke direct control kar sakte ho!"
+                )
+            }
+            lower.contains("status") || lower.contains("diagnostic") || lower.contains("check") -> {
+                ParsedMaxAction(
+                    actionType = ActionType.SYSTEM_DIAGNOSTIC,
+                    speechResponse = "Systems online, Boss! Arc Reactor at 100%, CPU cool, aur main ekdam mast mood me hoon!"
                 )
             }
             else -> {
                 ParsedMaxAction(
                     actionType = ActionType.GENERAL_TALK,
-                    speechResponse = "At your service, Sir. I am processing your query regarding '$prompt'. Systems are fully synchronized."
+                    speechResponse = "Ji Boss! Main aapki baat samajh gaya. Batao next kya plan hai, dost?"
                 )
             }
         }
     }
 }
+
