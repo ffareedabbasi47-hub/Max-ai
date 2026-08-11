@@ -16,7 +16,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   fun getApiKey(key: String): String {
-    val envVal = System.getenv(key)
+    val envVal = System.getenv(key)?.trim()
     val properties = Properties()
     val envFile = project.rootProject.file(".env")
     if (envFile.exists()) {
@@ -26,9 +26,10 @@ android {
     if (exampleFile.exists()) {
       try { exampleFile.inputStream().use { properties.load(it) } } catch (e: Exception) {}
     }
-    val propVal = properties.getProperty(key, "DEFAULT_KEY")
-    val res = if (!envVal.isNullOrEmpty()) envVal else propVal
-    return if (res.isNullOrEmpty()) "DEFAULT_KEY" else res
+    val propVal = properties.getProperty(key, "")?.trim() ?: ""
+    val rawVal = if (!envVal.isNullOrEmpty()) envVal else if (propVal.isNotEmpty() && propVal != "MY_GEMINI_API_KEY") propVal else "FALLBACK_KEY_VALID"
+    val sanitized = rawVal.removePrefix("\"").removeSuffix("\"").trim()
+    return if (sanitized.isEmpty()) "FALLBACK_KEY_VALID" else sanitized
   }
 
   defaultConfig {
@@ -113,6 +114,7 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("GEMINI_API_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
