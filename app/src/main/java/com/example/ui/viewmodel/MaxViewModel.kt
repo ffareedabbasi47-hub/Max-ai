@@ -330,6 +330,25 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         voiceEngine.speak(msg)
     }
 
+    fun toggleBackgroundWakeService(context: android.content.Context, enable: Boolean) {
+        val intent = android.content.Intent(context, com.example.system.MaxWakeService::class.java)
+        if (enable) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            val msg = "Background Wake Listening ON! Say 'Max' anytime, Boss!"
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+        } else {
+            context.stopService(intent)
+            val msg = "Background Wake Listening OFF, Boss."
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         telemetryJob?.cancel()
