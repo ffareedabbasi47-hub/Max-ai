@@ -23,7 +23,7 @@ abstract class MaxDatabase : RoomDatabase() {
                     context.applicationContext,
                     MaxDatabase::class.java,
                     "max_jarvis_db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration(true).build()
                 INSTANCE = instance
                 instance
             }

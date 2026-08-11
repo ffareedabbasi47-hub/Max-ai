@@ -81,43 +81,54 @@ class MaxVoiceEngine(
     }
 
     private fun initSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        _isListening.value = true
-                    }
+        try {
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            mainHandler.post {
+                try {
+                    if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                            setRecognitionListener(object : RecognitionListener {
+                                override fun onReadyForSpeech(params: Bundle?) {
+                                    _isListening.value = true
+                                }
 
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
+                                override fun onBeginningOfSpeech() {}
+                                override fun onRmsChanged(rmsdB: Float) {}
+                                override fun onBufferReceived(buffer: ByteArray?) {}
 
-                    override fun onEndOfSpeech() {
-                        _isListening.value = false
-                    }
+                                override fun onEndOfSpeech() {
+                                    _isListening.value = false
+                                }
 
-                    override fun onError(error: Int) {
-                        _isListening.value = false
-                    }
+                                override fun onError(error: Int) {
+                                    _isListening.value = false
+                                }
 
-                    override fun onResults(results: Bundle?) {
-                        _isListening.value = false
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            _speechRecognizedText.value = matches[0]
+                                override fun onResults(results: Bundle?) {
+                                    _isListening.value = false
+                                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                    if (!matches.isNullOrEmpty()) {
+                                        _speechRecognizedText.value = matches[0]
+                                    }
+                                }
+
+                                override fun onPartialResults(partialResults: Bundle?) {
+                                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                    if (!matches.isNullOrEmpty()) {
+                                        _speechRecognizedText.value = matches[0]
+                                    }
+                                }
+
+                                override fun onEvent(eventType: Int, params: Bundle?) {}
+                            })
                         }
                     }
-
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            _speechRecognizedText.value = matches[0]
-                        }
-                    }
-
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
