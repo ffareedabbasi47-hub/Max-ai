@@ -33,7 +33,7 @@ jobs:
           fi
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
