@@ -75,7 +75,7 @@ fun ArcReactorView(
 
     Box(
         modifier = modifier
-            .size(240.dp)
+            .size(180.dp)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {

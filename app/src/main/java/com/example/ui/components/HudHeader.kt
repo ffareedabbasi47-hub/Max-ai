@@ -52,7 +52,8 @@ fun HudHeader(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
             .background(HudSurface, shape = RoundedCornerShape(12.dp))
             .border(1.dp, HudBorderCyan, shape = RoundedCornerShape(12.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp)

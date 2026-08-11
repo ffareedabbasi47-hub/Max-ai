@@ -74,7 +74,13 @@ android {
         storePassword = "android"
         keyAlias = "androiddebugkey"
         keyPassword = "android"
+        enableV1Signing = true
+        enableV2Signing = true
       }
+    }
+    getByName("debug") {
+      enableV1Signing = true
+      enableV2Signing = true
     }
   }
 
@@ -85,11 +91,17 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       if (signingConfigs.findByName("release") != null) {
         signingConfig = signingConfigs.getByName("release")
+      } else if (signingConfigs.findByName("debugConfig") != null) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfig = signingConfigs.getByName("debug")
       }
     }
     debug {
       if (signingConfigs.findByName("debugConfig") != null) {
         signingConfig = signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfig = signingConfigs.getByName("debug")
       }
     }
   }
