@@ -29,8 +29,11 @@ class MaxVoiceEngine(
     private val _speechRecognizedText = MutableStateFlow("")
     val speechRecognizedText: StateFlow<String> = _speechRecognizedText
 
-    private val _voicePitch = MutableStateFlow(0.85f) // Slightly lower masculine JARVIS pitch
-    private val _voiceRate = MutableStateFlow(1.05f)  // Crisp, articulate speed
+    private val _voicePitch = MutableStateFlow(0.88f) // Masculine articulate JARVIS tone
+    private val _voiceRate = MutableStateFlow(1.02f)  // Natural speech cadence
+
+    private val _selectedLanguage = MutableStateFlow("AUTO") // "hi_IN", "en_IN", "en_US", "AUTO"
+    val selectedLanguage: StateFlow<String> = _selectedLanguage
 
     init {
         tts = TextToSpeech(context, this)
@@ -40,7 +43,7 @@ class MaxVoiceEngine(
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.apply {
-                language = Locale.US
+                applySelectedLanguage()
                 setPitch(_voicePitch.value)
                 setSpeechRate(_voiceRate.value)
                 setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -61,6 +64,44 @@ class MaxVoiceEngine(
         }
     }
 
+    fun setLanguagePreference(langCode: String) {
+        _selectedLanguage.value = langCode
+        applySelectedLanguage()
+    }
+
+    private fun applySelectedLanguage() {
+        val ttsEngine = tts ?: return
+        val targetLocale = when (_selectedLanguage.value) {
+            "hi_IN" -> Locale("hi", "IN")
+            "en_IN" -> Locale("en", "IN")
+            "en_US" -> Locale.US
+            else -> { // AUTO mode: Prefer hi_IN if installed, fallback to en_IN then Locale.US
+                val hiLocale = Locale("hi", "IN")
+                val hiRes = try { ttsEngine.isLanguageAvailable(hiLocale) } catch (e: Exception) { TextToSpeech.LANG_NOT_SUPPORTED }
+                if (hiRes >= TextToSpeech.LANG_AVAILABLE) {
+                    hiLocale
+                } else {
+                    val enInLocale = Locale("en", "IN")
+                    val enInRes = try { ttsEngine.isLanguageAvailable(enInLocale) } catch (e: Exception) { TextToSpeech.LANG_NOT_SUPPORTED }
+                    if (enInRes >= TextToSpeech.LANG_AVAILABLE) {
+                        enInLocale
+                    } else {
+                        Locale.US
+                    }
+                }
+            }
+        }
+
+        try {
+            val result = ttsEngine.setLanguage(targetLocale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                ttsEngine.language = Locale.US
+            }
+        } catch (e: Exception) {
+            try { ttsEngine.language = Locale.US } catch (ex: Exception) { ex.printStackTrace() }
+        }
+    }
+
     fun setVoiceParams(pitch: Float, rate: Float) {
         _voicePitch.value = pitch
         _voiceRate.value = rate
@@ -75,6 +116,7 @@ class MaxVoiceEngine(
         tts?.stop() // Flush previous audio immediately
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "MAX_UTTERANCE_${System.currentTimeMillis()}")
     }
+
 
     fun stopSpeaking() {
         try {

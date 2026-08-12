@@ -44,6 +44,8 @@ fun HomeScreen(
     val lastSpeechText by viewModel.lastSpeechText.collectAsState()
     val queryInput by viewModel.userInputQuery.collectAsState()
     val conversationMessages by viewModel.conversationMessages.collectAsState()
+    val isFallbackActive by viewModel.isFallbackActive.collectAsState()
+    val fallbackNotice by viewModel.fallbackNotice.collectAsState()
 
     var showHistoryDialog by remember { mutableStateOf(false) }
 
@@ -136,6 +138,25 @@ fun HomeScreen(
                     color = TextCyanMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        if (isFallbackActive && fallbackNotice.isNotEmpty()) {
+            Surface(
+                color = NeonAmberAlert.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonAmberAlert),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Text(
+                    text = fallbackNotice,
+                    color = NeonAmberAlert,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(8.dp)
                 )
             }
         }

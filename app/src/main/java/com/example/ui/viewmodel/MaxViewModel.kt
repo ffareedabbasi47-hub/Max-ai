@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.GeminiBrain
@@ -8,6 +9,7 @@ import com.example.data.api.diagnostics.GeminiDiagnosticResult
 import com.example.data.db.*
 import com.example.data.model.*
 import com.example.system.InstalledAppInfo
+import com.example.system.MaxAccessibilityService
 import com.example.system.SystemControlManager
 import com.example.system.SystemTelemetry
 import com.example.voice.MaxVoiceEngine
@@ -62,6 +64,15 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _geminiDiagnosticResult = MutableStateFlow<GeminiDiagnosticResult?>(null)
     val geminiDiagnosticResult: StateFlow<GeminiDiagnosticResult?> = _geminiDiagnosticResult
+
+    private val _isAccessibilityEnabled = MutableStateFlow(false)
+    val isAccessibilityEnabled: StateFlow<Boolean> = _isAccessibilityEnabled
+
+    private val _isFallbackActive = MutableStateFlow(false)
+    val isFallbackActive: StateFlow<Boolean> = _isFallbackActive
+
+    private val _fallbackNotice = MutableStateFlow("")
+    val fallbackNotice: StateFlow<String> = _fallbackNotice
 
     private var telemetryJob: Job? = null
 
@@ -131,6 +142,37 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun checkAccessibilityStatus(context: Context) {
+        val enabled = MaxAccessibilityService.isEnabled() || checkAccessibilitySystemSetting(context)
+        _isAccessibilityEnabled.value = enabled
+    }
+
+    private fun checkAccessibilitySystemSetting(context: Context): Boolean {
+        return try {
+            val expectedService = "${context.packageName}/${MaxAccessibilityService::class.java.canonicalName}"
+            val enabledServices = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            enabledServices.contains(expectedService, ignoreCase = true)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun saveCustomKey(prefName: String, value: String) {
+        val prefs = getApplication<Application>().getSharedPreferences("max_jarvis_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString(prefName, value.trim()).apply()
+        val msg = "Key saved to $prefName, Boss!"
+        _lastSpeechText.value = msg
+        voiceEngine.speak(msg)
+    }
+
+    fun getCustomKey(prefName: String): String {
+        val prefs = getApplication<Application>().getSharedPreferences("max_jarvis_prefs", Context.MODE_PRIVATE)
+        return prefs.getString(prefName, "") ?: ""
     }
 
     fun getApiKey(): String {
@@ -264,6 +306,12 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             // Brain logic evaluation
             val parsedAction = brain.processUserPrompt(userPrompt)
+            _isFallbackActive.value = parsedAction.isFallback
+            if (parsedAction.isFallback) {
+                _fallbackNotice.value = "⚠️ Local Fallback Mode: No active Gemini/OpenAI/Claude API Key found. Add key in Settings for live AI answers."
+            } else {
+                _fallbackNotice.value = ""
+            }
             _maxState.value = MaxState.EXECUTING
 
             var systemExecutionStatus = "Executed"

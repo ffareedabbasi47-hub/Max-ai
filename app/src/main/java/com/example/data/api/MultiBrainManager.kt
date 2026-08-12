@@ -129,10 +129,12 @@ class MultiBrainManager(private val context: Context) {
         val customKey1 = prefs.getString("api_key_slot_1", "") ?: ""
         val customKey2 = prefs.getString("api_key_slot_2", "") ?: ""
         val customKey3 = prefs.getString("api_key_slot_3", "") ?: ""
+        val customGeminiKey = prefs.getString("custom_gemini_api_key", "") ?: ""
 
         if (customKey1.isNotBlank()) keys.add(customKey1.trim())
         if (customKey2.isNotBlank()) keys.add(customKey2.trim())
         if (customKey3.isNotBlank()) keys.add(customKey3.trim())
+        if (customGeminiKey.isNotBlank()) keys.add(customGeminiKey.trim())
 
         val buildKey = BuildConfig.GEMINI_API_KEY.trim()
         if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") {
@@ -168,13 +170,15 @@ class MultiBrainManager(private val context: Context) {
                 actionType = actionType,
                 target = param1,
                 details = param2,
-                speechResponse = cleanSpeech.ifEmpty { "Haan Boss, kaam ho gaya!" }
+                speechResponse = cleanSpeech.ifEmpty { "Haan Boss, kaam ho gaya!" },
+                isFallback = false
             )
         }
 
         return ParsedMaxAction(
             actionType = ActionType.GENERAL_TALK,
-            speechResponse = rawText
+            speechResponse = rawText,
+            isFallback = false
         )
     }
 
@@ -184,7 +188,7 @@ class MultiBrainManager(private val context: Context) {
         val dateStr = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()).format(Date())
         val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
 
-        return when {
+        val baseAction = when {
             // General Date & Time queries
             lower.contains("date") || lower.contains("tareekh") || lower.contains("din") -> {
                 ParsedMaxAction(
@@ -256,13 +260,15 @@ class MultiBrainManager(private val context: Context) {
                 )
             }
             else -> {
-                val notice = if (missingKey) " (Tip: Add Gemini API Key in Settings for live AI answers)" else ""
+                val notice = if (missingKey) " (Tip: Configure API Key in Settings for live AI answers)" else ""
                 ParsedMaxAction(
                     actionType = ActionType.GENERAL_TALK,
                     speechResponse = "Haan Boss! Main aapki baat samajh gaya. Kya command hai?$notice"
                 )
             }
         }
+
+        return baseAction.copy(isFallback = true)
     }
 }
 

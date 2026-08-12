@@ -1,6 +1,10 @@
 package com.example
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -17,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.system.MaxWakeService
 import com.example.ui.components.HudBottomNav
 import com.example.ui.components.HudHeader
 import com.example.ui.components.HudNavDestination
@@ -26,15 +31,43 @@ import com.example.ui.theme.MAXTheme
 import com.example.ui.viewmodel.MaxViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private var maxViewModelInstance: MaxViewModel? = null
+
+    private val wakeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == MaxWakeService.ACTION_WAKE_WORD_DETECTED) {
+                maxViewModelInstance?.testWakeWord()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wakeReceiver, IntentFilter(MaxWakeService.ACTION_WAKE_WORD_DETECTED), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(wakeReceiver, IntentFilter(MaxWakeService.ACTION_WAKE_WORD_DETECTED))
+        }
+
+        intent?.let { handleIntent(it) }
+
         setContent {
             MAXTheme {
                 val maxViewModel: MaxViewModel = viewModel()
+                maxViewModelInstance = maxViewModel
+
                 val telemetry by maxViewModel.systemTelemetry.collectAsState()
                 var currentDestination by remember { mutableStateOf(HudNavDestination.HOME) }
+
+                // Check accessibility status when resumed
+                val context = LocalContext.current
+                DisposableEffect(Unit) {
+                    maxViewModel.checkAccessibilityStatus(context)
+                    onDispose {}
+                }
 
                 // Runtime Permissions Launcher
                 val permissionsToRequest = mutableListOf(
@@ -89,10 +122,31 @@ class MainActivity : ComponentActivity() {
                             HudNavDestination.VISION -> ScreenAssistScreen(viewModel = maxViewModel)
                             HudNavDestination.TOOLS -> ToolsTabScreen(viewModel = maxViewModel)
                         }
-
                     }
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        if (intent.getBooleanExtra("WAKE_WORD_TRIGGERED", false)) {
+            maxViewModelInstance?.testWakeWord()
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(wakeReceiver)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        super.onDestroy()
+    }
 }
+

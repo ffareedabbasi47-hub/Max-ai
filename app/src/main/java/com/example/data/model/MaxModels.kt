@@ -34,7 +34,8 @@ data class ParsedMaxAction(
     val actionType: ActionType,
     val target: String = "",
     val details: String = "",
-    val speechResponse: String
+    val speechResponse: String,
+    val isFallback: Boolean = false
 )
 
 // Gemini API REST Request & Response Models for Moshi

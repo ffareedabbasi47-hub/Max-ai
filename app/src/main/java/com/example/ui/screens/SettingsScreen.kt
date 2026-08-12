@@ -56,6 +56,9 @@ fun SettingsScreen(
         var keySlot1 by remember { mutableStateOf(viewModel.getApiKeySlot(1)) }
         var keySlot2 by remember { mutableStateOf(viewModel.getApiKeySlot(2)) }
         var keySlot3 by remember { mutableStateOf(viewModel.getApiKeySlot(3)) }
+        var customGeminiKey by remember { mutableStateOf(viewModel.getCustomKey("custom_gemini_api_key")) }
+        var openAiKey by remember { mutableStateOf(viewModel.getCustomKey("openai_api_key")) }
+        var claudeKey by remember { mutableStateOf(viewModel.getCustomKey("claude_api_key")) }
 
         Box(
             modifier = Modifier
@@ -66,14 +69,14 @@ fun SettingsScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "MULTI-API KEY ROTATION (LIMIT EXPANSION)",
+                    text = "MULTI-PROVIDER API KEY MANAGEMENT",
                     color = CyanPrimary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "Add up to 5 Gemini API Keys. MAX will automatically rotate to the next key if quota is exhausted!",
+                    text = "Configure Gemini, OpenAI, or Claude keys. All entered keys are saved locally in SharedPreferences.",
                     color = TextCyanMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
@@ -85,7 +88,7 @@ fun SettingsScreen(
                         keySlot1 = it
                         viewModel.saveApiKeySlot(1, it)
                     },
-                    label = { Text("API Key Slot 1 (Primary)", color = TextCyanMuted, fontSize = 10.sp) },
+                    label = { Text("Gemini Slot 1 (Primary)", color = TextCyanMuted, fontSize = 10.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -102,7 +105,7 @@ fun SettingsScreen(
                         keySlot2 = it
                         viewModel.saveApiKeySlot(2, it)
                     },
-                    label = { Text("API Key Slot 2 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
+                    label = { Text("Gemini Slot 2 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -119,7 +122,7 @@ fun SettingsScreen(
                         keySlot3 = it
                         viewModel.saveApiKeySlot(3, it)
                     },
-                    label = { Text("API Key Slot 3 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
+                    label = { Text("Gemini Slot 3 (Backup)", color = TextCyanMuted, fontSize = 10.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -129,6 +132,118 @@ fun SettingsScreen(
                         unfocusedTextColor = TextCyanLight
                     )
                 )
+
+                OutlinedTextField(
+                    value = customGeminiKey,
+                    onValueChange = {
+                        customGeminiKey = it
+                        viewModel.saveCustomKey("custom_gemini_api_key", it)
+                    },
+                    label = { Text("Custom Gemini API Key", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
+                )
+
+                OutlinedTextField(
+                    value = openAiKey,
+                    onValueChange = {
+                        openAiKey = it
+                        viewModel.saveCustomKey("openai_api_key", it)
+                    },
+                    label = { Text("OpenAI API Key (Backup Provider)", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
+                )
+
+                OutlinedTextField(
+                    value = claudeKey,
+                    onValueChange = {
+                        claudeKey = it
+                        viewModel.saveCustomKey("claude_api_key", it)
+                    },
+                    label = { Text("Claude API Key (Backup Provider)", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight,
+                        unfocusedTextColor = TextCyanLight
+                    )
+                )
+            }
+        }
+
+        // Accessibility Service Automation Onboarding Card
+        val isAccessibilityEnabled by viewModel.isAccessibilityEnabled.collectAsStateWithLifecycle()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(HudSurface, shape = RoundedCornerShape(12.dp))
+                .border(1.dp, if (isAccessibilityEnabled) NeonGreenStatus else NeonAmberAlert, shape = RoundedCornerShape(12.dp))
+                .padding(12.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "AUTOMATION ACCESSIBILITY SERVICE",
+                        color = CyanPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Surface(
+                        color = if (isAccessibilityEnabled) NeonGreenStatus.copy(alpha = 0.2f) else NeonAmberAlert.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isAccessibilityEnabled) NeonGreenStatus else NeonAmberAlert),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = if (isAccessibilityEnabled) "ACTIVE" else "DISABLED",
+                            color = if (isAccessibilityEnabled) NeonGreenStatus else NeonAmberAlert,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Required for hands-free screen reading, button clicking, and UI automation. Without this service, tap automation commands will fail.",
+                    color = TextCyanMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                if (!isAccessibilityEnabled) {
+                    Button(
+                        onClick = {
+                            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonAmberAlert, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("ENABLE ACCESSIBILITY SERVICE IN SETTINGS", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                }
             }
         }
 
@@ -190,8 +305,47 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
+                Text(
+                    text = "TTS Language & Accent Focus:",
+                    color = TextCyanMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                val selectedLang by viewModel.voiceEngine.selectedLanguage.collectAsStateWithLifecycle()
+                val langOptions = listOf(
+                    "AUTO" to "Auto Hinglish",
+                    "hi_IN" to "Hindi (hi-IN)",
+                    "en_IN" to "Indian English (en-IN)",
+                    "en_US" to "US English (en-US)"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    langOptions.forEach { (code, label) ->
+                        val isSelected = selectedLang == code
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.voiceEngine.setLanguagePreference(code) },
+                            label = { Text(label, fontSize = 9.sp, fontFamily = FontFamily.Monospace) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CyanPrimary,
+                                selectedLabelColor = Color.Black,
+                                containerColor = HudSurfaceVariant,
+                                labelColor = TextCyanLight
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Button(
-                    onClick = { viewModel.voiceEngine.speak("Systems online, Sir. Testing JARVIS voice synthesis configuration.") },
+                    onClick = { viewModel.voiceEngine.speak("Haan Boss! Main Hinglish aur English dono samajhta aur bolta hoon.") },
                     colors = ButtonDefaults.buttonColors(containerColor = CyanSecondary, contentColor = Color.Black),
                     shape = RoundedCornerShape(8.dp)
                 ) {
