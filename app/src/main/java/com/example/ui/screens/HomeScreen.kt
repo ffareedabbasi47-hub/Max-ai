@@ -55,7 +55,7 @@ fun HomeScreen(
         QuickActionItem("File Vault", "Create / Read Files", Icons.Default.Folder, "Create note project_plan.txt"),
         QuickActionItem("Web Search", "Live AI Research", Icons.Default.Public, "Search recent technology news"),
         QuickActionItem("Direct Call", "Voice Links", Icons.Default.Call, "Call Pepper"),
-        QuickActionItem("Auto Comms", "WhatsApp & Email", Icons.Default.Send, "Open WhatsApp")
+        QuickActionItem("Auto Comms", "WhatsApp & Email", Icons.AutoMirrored.Filled.Send, "Open WhatsApp")
     )
 
     Column(

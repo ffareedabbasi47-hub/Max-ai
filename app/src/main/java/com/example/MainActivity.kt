@@ -46,11 +46,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(wakeReceiver, IntentFilter(MaxWakeService.ACTION_WAKE_WORD_DETECTED), Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(wakeReceiver, IntentFilter(MaxWakeService.ACTION_WAKE_WORD_DETECTED))
-        }
+        ContextCompat.registerReceiver(
+            this,
+            wakeReceiver,
+            IntentFilter(MaxWakeService.ACTION_WAKE_WORD_DETECTED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         intent?.let { handleIntent(it) }
 

@@ -119,8 +119,10 @@ class MaxWakeService : Service() {
     }
 
     private fun onWakeWordDetected() {
-        // Send Broadcast
-        val broadcastIntent = Intent(ACTION_WAKE_WORD_DETECTED)
+        // Send Broadcast with explicit package name for RECEIVER_NOT_EXPORTED compatibility
+        val broadcastIntent = Intent(ACTION_WAKE_WORD_DETECTED).apply {
+            setPackage(packageName)
+        }
         sendBroadcast(broadcastIntent)
 
         // Launch / Bring MainActivity to Foreground

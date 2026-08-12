@@ -72,16 +72,16 @@ class MaxVoiceEngine(
     private fun applySelectedLanguage() {
         val ttsEngine = tts ?: return
         val targetLocale = when (_selectedLanguage.value) {
-            "hi_IN" -> Locale("hi", "IN")
-            "en_IN" -> Locale("en", "IN")
+            "hi_IN" -> Locale.forLanguageTag("hi-IN")
+            "en_IN" -> Locale.forLanguageTag("en-IN")
             "en_US" -> Locale.US
             else -> { // AUTO mode: Prefer hi_IN if installed, fallback to en_IN then Locale.US
-                val hiLocale = Locale("hi", "IN")
+                val hiLocale = Locale.forLanguageTag("hi-IN")
                 val hiRes = try { ttsEngine.isLanguageAvailable(hiLocale) } catch (e: Exception) { TextToSpeech.LANG_NOT_SUPPORTED }
                 if (hiRes >= TextToSpeech.LANG_AVAILABLE) {
                     hiLocale
                 } else {
-                    val enInLocale = Locale("en", "IN")
+                    val enInLocale = Locale.forLanguageTag("en-IN")
                     val enInRes = try { ttsEngine.isLanguageAvailable(enInLocale) } catch (e: Exception) { TextToSpeech.LANG_NOT_SUPPORTED }
                     if (enInRes >= TextToSpeech.LANG_AVAILABLE) {
                         enInLocale
