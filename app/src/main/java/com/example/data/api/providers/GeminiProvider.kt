@@ -12,14 +12,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
 
 class GeminiProvider(
     private val client: OkHttpClient
 ) : AIProvider {
 
     override val type: ProviderType = ProviderType.GEMINI
-    override val name: String = "Google Gemini 2.5 Flash"
+    override val name: String = "Google Gemini AI"
 
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val requestAdapter = moshi.adapter(GeminiRequest::class.java)
@@ -28,33 +27,48 @@ class GeminiProvider(
     override fun isConfigured(): Boolean = true
 
     override suspend fun generateResponse(prompt: String, systemPrompt: String, apiKey: String): String? = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "FALLBACK_KEY_VALID" || apiKey == "NON_EXISTENT_KEY") {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank() || cleanKey == "MY_GEMINI_API_KEY" || cleanKey == "FALLBACK_KEY_VALID" || cleanKey == "NON_EXISTENT_KEY") {
             return@withContext null
         }
 
-        try {
-            val geminiRequest = GeminiRequest(
-                contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = prompt)))),
-                systemInstruction = GeminiContent(parts = listOf(GeminiPart(text = systemPrompt)))
-            )
+        // List of modern supported Gemini model endpoints in order of preference
+        val modelsToTry = listOf(
+            "gemini-3.5-flash",
+            "gemini-2.5-flash-preview-12-2025",
+            "gemini-1.5-flash",
+            "gemini-2.0-flash"
+        )
 
-            val jsonBody = requestAdapter.toJson(geminiRequest)
-            val mediaType = "application/json; charset=utf-8".toMediaType()
-            val body = jsonBody.toRequestBody(mediaType)
+        for (model in modelsToTry) {
+            try {
+                val geminiRequest = GeminiRequest(
+                    contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = prompt)))),
+                    systemInstruction = GeminiContent(parts = listOf(GeminiPart(text = systemPrompt)))
+                )
 
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-            val request = Request.Builder().url(url).post(body).build()
+                val jsonBody = requestAdapter.toJson(geminiRequest)
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = jsonBody.toRequestBody(mediaType)
 
-            val response = client.newCall(request).execute()
-            val responseStr = response.body?.string()
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$cleanKey"
+                val request = Request.Builder().url(url).post(body).build()
 
-            if (response.isSuccessful && responseStr != null) {
-                val geminiResponse = responseAdapter.fromJson(responseStr)
-                return@withContext geminiResponse?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                val response = client.newCall(request).execute()
+                val responseStr = response.body?.string()
+
+                if (response.isSuccessful && responseStr != null) {
+                    val geminiResponse = responseAdapter.fromJson(responseStr)
+                    val text = geminiResponse?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    if (!text.isNullOrBlank()) {
+                        return@withContext text.trim()
+                    }
+                }
+            } catch (e: Exception) {
+                // Try next model if any endpoint fails
             }
-        } catch (e: Exception) {
-            // Error handling fallback
         }
         return@withContext null
     }
 }
+

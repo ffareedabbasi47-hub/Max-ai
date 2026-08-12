@@ -85,13 +85,11 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when (currentDestination) {
                             HudNavDestination.HOME -> HomeScreen(viewModel = maxViewModel)
-                            HudNavDestination.SYSTEM -> SystemControlScreen(viewModel = maxViewModel)
+                            HudNavDestination.CONTROL -> SystemControlScreen(viewModel = maxViewModel)
                             HudNavDestination.VISION -> ScreenAssistScreen(viewModel = maxViewModel)
-                            HudNavDestination.COMMS -> CommunicationScreen(viewModel = maxViewModel)
-                            HudNavDestination.FILES -> FileManagerScreen(viewModel = maxViewModel)
-                            HudNavDestination.CALLS -> CallSecretaryScreen(viewModel = maxViewModel)
-                            HudNavDestination.SETTINGS -> SettingsScreen(viewModel = maxViewModel)
+                            HudNavDestination.TOOLS -> ToolsTabScreen(viewModel = maxViewModel)
                         }
+
                     }
                 }
             }

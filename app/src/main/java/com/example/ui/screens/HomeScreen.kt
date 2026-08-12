@@ -11,25 +11,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.db.CommandLogEntity
+import com.example.data.model.ChatMessage
 import com.example.data.model.MaxState
 import com.example.ui.components.ArcReactorView
-import com.example.ui.components.SystemStatsHud
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MaxViewModel
+
+private data class QuickActionItem(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val command: String
+)
 
 @Composable
 fun HomeScreen(
@@ -39,33 +43,30 @@ fun HomeScreen(
     val maxState by viewModel.maxState.collectAsState()
     val lastSpeechText by viewModel.lastSpeechText.collectAsState()
     val queryInput by viewModel.userInputQuery.collectAsState()
-    val telemetry by viewModel.systemTelemetry.collectAsState()
-    val logs by viewModel.commandLogs.collectAsState()
+    val conversationMessages by viewModel.conversationMessages.collectAsState()
 
-    val quickCommands = listOf(
-        "System Diagnostic",
-        "Open WhatsApp",
-        "Turn on Wi-Fi",
-        "Create file alpha.txt",
-        "Draft email to Stark",
-        "Call Pepper Potts",
-        "Search quantum AI news"
+    var showHistoryDialog by remember { mutableStateOf(false) }
+
+    val quickActions = listOf(
+        QuickActionItem("Phone Control", "Wi-Fi, Mute, Volume", Icons.Default.PhonelinkSetup, "Turn on Wi-Fi"),
+        QuickActionItem("Vision Assist", "Explain Screen", Icons.Default.Visibility, "Explain screen content"),
+        QuickActionItem("File Vault", "Create / Read Files", Icons.Default.Folder, "Create note project_plan.txt"),
+        QuickActionItem("Web Search", "Live AI Research", Icons.Default.Public, "Search recent technology news"),
+        QuickActionItem("Direct Call", "Voice Links", Icons.Default.Call, "Call Pepper"),
+        QuickActionItem("Auto Comms", "WhatsApp & Email", Icons.Default.Send, "Open WhatsApp")
     )
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // System Stats Bar
-        SystemStatsHud(telemetry = telemetry)
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Arc Reactor HUD Core
+        // Compact MAX Animated Core
         Box(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             ArcReactorView(
@@ -74,62 +75,190 @@ fun HomeScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // State Indicator & Interruption Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val stateColor = when (maxState) {
+                    MaxState.IDLE -> NeonGreenStatus
+                    MaxState.LISTENING -> CyanPrimary
+                    MaxState.PROCESSING -> NeonAmberAlert
+                    MaxState.EXECUTING -> Color(0xFF00E5FF)
+                    MaxState.SPEAKING -> CyanTertiary
+                }
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(stateColor, shape = RoundedCornerShape(4.dp))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "STATE: ${maxState.name}",
+                    color = stateColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            if (maxState == MaxState.SPEAKING || maxState == MaxState.LISTENING) {
+                Box(
+                    modifier = Modifier
+                        .background(NeonRedError, shape = RoundedCornerShape(12.dp))
+                        .clickable { viewModel.stopAllAudioAndListening() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "STOP",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = "Tap Core or say 'Max'",
+                    color = TextCyanMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
 
         // Spoken Output Display Box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(HudSurface, shape = RoundedCornerShape(12.dp))
-                .border(1.dp, HudBorderCyan, shape = RoundedCornerShape(12.dp))
-                .padding(12.dp)
+                .background(HudSurface, shape = RoundedCornerShape(10.dp))
+                .border(1.dp, HudBorderCyan, shape = RoundedCornerShape(10.dp))
+                .padding(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = "Speaker",
                     tint = CyanPrimary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = lastSpeechText,
                     color = TextCyanLight,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Quick Command Chips
+        // Recent Conversation Panel
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "CONVERSATION STREAM",
+                color = CyanPrimary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                text = "VIEW FULL CHAT",
+                color = CyanSecondary,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.clickable { showHistoryDialog = true }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(conversationMessages.takeLast(6)) { msg ->
+                ChatBubbleRow(msg = msg)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Quick Actions Grid
+        Text(
+            text = "QUICK SYSTEM ACTIONS",
+            color = CyanPrimary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(quickCommands) { cmd ->
+            items(quickActions) { action ->
                 Box(
                     modifier = Modifier
-                        .background(HudSurfaceVariant, shape = RoundedCornerShape(20.dp))
-                        .border(1.dp, HudBorderCyan.copy(alpha = 0.5f), shape = RoundedCornerShape(20.dp))
-                        .clickable { viewModel.executePrompt(cmd) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .width(130.dp)
+                        .background(HudSurfaceVariant, shape = RoundedCornerShape(10.dp))
+                        .border(1.dp, HudBorderCyan.copy(alpha = 0.5f), shape = RoundedCornerShape(10.dp))
+                        .clickable { viewModel.executePrompt(action.command) }
+                        .padding(8.dp)
                 ) {
-                    Text(
-                        text = cmd,
-                        color = TextCyanLight,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Column {
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = action.title,
+                            tint = CyanPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = action.title,
+                            color = TextCyanLight,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = action.subtitle,
+                            color = TextCyanMuted,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Command Prompt Input Row
+        // Bottom Command Input Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -139,7 +268,7 @@ fun HomeScreen(
                 onValueChange = { viewModel.onQueryChanged(it) },
                 placeholder = {
                     Text(
-                        text = "Command MAX or speak...",
+                        text = "Ask MAX anything...",
                         color = TextCyanMuted,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace
@@ -158,14 +287,14 @@ fun HomeScreen(
                 shape = RoundedCornerShape(24.dp)
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Mic Button
             IconButton(
                 onClick = { viewModel.toggleVoiceListening() },
                 modifier = Modifier
-                    .size(48.dp)
-                    .background(if (maxState == MaxState.LISTENING) NeonGreenStatus else CyanPrimary, shape = RoundedCornerShape(24.dp))
+                    .size(44.dp)
+                    .background(if (maxState == MaxState.LISTENING) NeonGreenStatus else CyanPrimary, shape = RoundedCornerShape(22.dp))
             ) {
                 Icon(
                     imageVector = if (maxState == MaxState.LISTENING) Icons.Default.MicOff else Icons.Default.Mic,
@@ -180,8 +309,8 @@ fun HomeScreen(
             IconButton(
                 onClick = { viewModel.executePrompt(queryInput) },
                 modifier = Modifier
-                    .size(48.dp)
-                    .background(CyanSecondary, shape = RoundedCornerShape(24.dp))
+                    .size(44.dp)
+                    .background(CyanSecondary, shape = RoundedCornerShape(22.dp))
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
@@ -190,69 +319,87 @@ fun HomeScreen(
                 )
             }
         }
+    }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Command Log History Stream
-        Text(
-            text = "COMMAND LOG HISTORY",
-            color = CyanPrimary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier
-                .align(Alignment.Start)
-                .padding(vertical = 4.dp)
+    // Full Chat History Dialog
+    if (showHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showHistoryDialog = false },
+            title = {
+                Text(
+                    text = "FULL CONVERSATION HISTORY",
+                    color = CyanPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(conversationMessages) { msg ->
+                        ChatBubbleRow(msg = msg)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistoryDialog = false }) {
+                    Text("CLOSE", color = CyanPrimary, fontFamily = FontFamily.Monospace)
+                }
+            },
+            containerColor = HudSurface,
+            shape = RoundedCornerShape(16.dp)
         )
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(logs) { log ->
-                LogItemRow(log = log)
-            }
-        }
     }
 }
 
 @Composable
-private fun LogItemRow(log: CommandLogEntity) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(HudSurface, shape = RoundedCornerShape(8.dp))
-            .border(0.5.dp, HudBorderCyan.copy(alpha = 0.3f), shape = RoundedCornerShape(8.dp))
-            .padding(8.dp)
+private fun ChatBubbleRow(msg: ChatMessage) {
+    val isUser = msg.sender == "USER"
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .background(
+                    if (isUser) CyanPrimary.copy(alpha = 0.2f) else HudSurfaceVariant,
+                    shape = RoundedCornerShape(
+                        topStart = 12.dp,
+                        topEnd = 12.dp,
+                        bottomStart = if (isUser) 12.dp else 2.dp,
+                        bottomEnd = if (isUser) 2.dp else 12.dp
+                    )
+                )
+                .border(
+                    0.5.dp,
+                    if (isUser) CyanPrimary else HudBorderCyan,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(8.dp)
+        ) {
+            Column {
                 Text(
-                    text = "> ${log.prompt}",
-                    color = TextCyanLight,
-                    fontSize = 11.sp,
+                    text = msg.sender,
+                    color = if (isUser) CyanPrimary else CyanSecondary,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = log.actionType,
-                    color = CyanSecondary,
-                    fontSize = 9.sp,
+                    text = msg.text,
+                    color = TextCyanLight,
+                    fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = log.response,
-                color = TextCyanMuted,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace
-            )
         }
     }
 }
+

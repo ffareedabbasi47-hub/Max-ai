@@ -72,13 +72,19 @@ class MaxVoiceEngine(
         if (text.isBlank()) return
         stopListening()
         _isSpeaking.value = true
+        tts?.stop() // Flush previous audio immediately
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "MAX_UTTERANCE_${System.currentTimeMillis()}")
     }
 
     fun stopSpeaking() {
-        tts?.stop()
+        try {
+            tts?.stop()
+        } catch (e: Exception) {
+            // ignore
+        }
         _isSpeaking.value = false
     }
+
 
     private fun initSpeechRecognizer() {
         try {

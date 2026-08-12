@@ -10,7 +10,15 @@ enum class MaxState {
     EXECUTING
 }
 
+data class ChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val sender: String, // "USER" or "MAX"
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 enum class ActionType {
+
     OPEN_APP,
     TOGGLE_SETTINGS,
     SEND_WHATSAPP,

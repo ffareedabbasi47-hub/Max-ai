@@ -32,6 +32,7 @@ fun SystemControlScreen(
     modifier: Modifier = Modifier
 ) {
     val apps by viewModel.installedApps.collectAsState()
+    val telemetry by viewModel.systemTelemetry.collectAsState()
     var appFilter by remember { mutableStateOf("") }
 
     val filteredApps = remember(apps, appFilter) {
@@ -49,10 +50,16 @@ fun SystemControlScreen(
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 6.dp)
         )
 
+        // Telemetry Gauges
+        com.example.ui.components.SystemStatsHud(telemetry = telemetry)
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         // System Toggles Panel
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

@@ -1,6 +1,8 @@
 package com.example.system
 
+import android.app.ActivityManager
 import android.content.Context
+
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
@@ -199,12 +201,18 @@ class SystemControlManager(private val context: Context) {
         val status: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
 
-        // Memory info
-        val runtime = Runtime.getRuntime()
-        val usedMemMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-        val totalMemMb = runtime.maxMemory() / (1024 * 1024)
+        // Memory info using ActivityManager for real system RAM
+        val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memInfo = ActivityManager.MemoryInfo()
+        actManager.getMemoryInfo(memInfo)
+
+        val totalRamMb = memInfo.totalMem / (1024 * 1024)
+        val availRamMb = memInfo.availMem / (1024 * 1024)
+        val usedRamMb = (totalRamMb - availRamMb).coerceAtLeast(0L)
+
 
         // Audio Ringer info
+
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val ringerStr = when (audioManager.ringerMode) {
             AudioManager.RINGER_MODE_SILENT -> "Silent"
@@ -217,8 +225,8 @@ class SystemControlManager(private val context: Context) {
         return SystemTelemetry(
             batteryLevel = batteryPct,
             isCharging = isCharging,
-            ramUsedMb = usedMemMb,
-            ramTotalMb = totalMemMb,
+            ramUsedMb = usedRamMb,
+            ramTotalMb = totalRamMb,
             cpuUsagePct = pseudoCpuPct,
             wifiEnabled = true,
             bluetoothEnabled = true,

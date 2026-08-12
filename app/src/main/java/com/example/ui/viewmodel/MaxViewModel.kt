@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.GeminiBrain
+import com.example.data.api.diagnostics.GeminiDiagnosticResult
 import com.example.data.db.*
 import com.example.data.model.*
 import com.example.system.InstalledAppInfo
@@ -49,19 +50,30 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
     val autoReplyList: StateFlow<List<AutoReplyEntity>> = dao.getAllAutoReplies()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _conversationMessages = MutableStateFlow<List<ChatMessage>>(
+        listOf(
+            ChatMessage(sender = "MAX", text = "Systems online, Boss. MAX Core is ready for your deployment.")
+        )
+    )
+    val conversationMessages: StateFlow<List<ChatMessage>> = _conversationMessages
+
     private val _installedApps = MutableStateFlow<List<InstalledAppInfo>>(emptyList())
     val installedApps: StateFlow<List<InstalledAppInfo>> = _installedApps
+
+    private val _geminiDiagnosticResult = MutableStateFlow<GeminiDiagnosticResult?>(null)
+    val geminiDiagnosticResult: StateFlow<GeminiDiagnosticResult?> = _geminiDiagnosticResult
 
     private var telemetryJob: Job? = null
 
     init {
         // Greet user on launch
         viewModelScope.launch {
-            _lastSpeechText.value = "Systems online, Sir. MAX is ready for deployment."
-            voiceEngine.speak("Systems online, Sir. MAX is ready for deployment.")
+            _lastSpeechText.value = "Systems online, Boss. MAX is ready for deployment."
+            voiceEngine.speak("Systems online, Boss. MAX is ready for deployment.")
             loadInstalledApps()
             populateSampleDataIfNeeded()
         }
+
 
         // Periodically refresh system telemetry ticks
         telemetryJob = viewModelScope.launch {
@@ -121,7 +133,13 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun getApiKey(): String {
+        return brain.getActiveKey()
+    }
+
     private fun loadInstalledApps() {
+
+
         viewModelScope.launch {
             _installedApps.value = systemManager.getInstalledApps()
         }
@@ -172,9 +190,63 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         _userInputQuery.value = newText
     }
 
+    fun stopAllAudioAndListening() {
+        voiceEngine.stopSpeaking()
+        voiceEngine.stopListening()
+        _maxState.value = MaxState.IDLE
+    }
+
+    fun runGeminiDiagnosticCheck(apiKey: String = com.example.BuildConfig.GEMINI_API_KEY) {
+        _maxState.value = MaxState.PROCESSING
+        _conversationMessages.value = _conversationMessages.value + ChatMessage(
+            sender = "USER",
+            text = "Run Gemini API Connectivity Diagnostic Ping"
+        )
+        viewModelScope.launch {
+            val result = brain.runGeminiDiagnostic(apiKey)
+            _geminiDiagnosticResult.value = result
+            _maxState.value = MaxState.IDLE
+
+            val speech = if (result.isSuccess) {
+                "Gemini API Ping Succeeded! HTTP 200 OK. Latency: ${result.latencyMs}ms on model ${result.modelTested}."
+            } else {
+                "Gemini API Diagnostic Failed. Code: ${result.statusCode ?: "None"} (${result.statusCategory}). Error: ${result.errorMessage ?: "Unknown error"}"
+            }
+
+            _lastSpeechText.value = speech
+            _conversationMessages.value = _conversationMessages.value + ChatMessage(
+                sender = "MAX",
+                text = speech
+            )
+
+            dao.insertCommandLog(
+                CommandLogEntity(
+                    prompt = "Gemini Diagnostic Ping",
+                    response = speech,
+                    actionType = "SYSTEM_DIAGNOSTIC",
+                    status = if (result.isSuccess) "PASSED_200" else "FAILED_${result.statusCode ?: 0}"
+                )
+            )
+
+            voiceEngine.speak(speech)
+        }
+    }
+
+    fun testWakeWord() {
+        stopAllAudioAndListening()
+        val wakeAck = "Yes Boss? Boliyen, main sun raha hoon!"
+        _lastSpeechText.value = wakeAck
+        _maxState.value = MaxState.LISTENING
+        voiceEngine.speak(wakeAck)
+        viewModelScope.launch {
+            delay(1500)
+            voiceEngine.startListening()
+        }
+    }
+
     fun toggleVoiceListening() {
-        if (voiceEngine.isListening.value) {
-            voiceEngine.stopListening()
+        if (voiceEngine.isListening.value || voiceEngine.isSpeaking.value) {
+            stopAllAudioAndListening()
         } else {
             voiceEngine.startListening()
         }
@@ -184,6 +256,10 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         if (userPrompt.isBlank()) return
         _userInputQuery.value = ""
         _maxState.value = MaxState.PROCESSING
+
+        // Add user prompt to chat history
+        val userMsg = ChatMessage(sender = "USER", text = userPrompt)
+        _conversationMessages.value = _conversationMessages.value + userMsg
 
         viewModelScope.launch {
             // Brain logic evaluation
@@ -219,7 +295,6 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                     val content = if (parsedAction.details.isNotBlank()) parsedAction.details else userPrompt
                     val fileStatus = systemManager.createFileInStorage(fileName, content)
 
-                    // Save to Room database as well
                     dao.insertNote(
                         NoteEntity(
                             title = fileName,
@@ -234,7 +309,9 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                     systemExecutionStatus = "Live Search Analyzed"
                 }
                 ActionType.SYSTEM_DIAGNOSTIC -> {
-                    systemExecutionStatus = "Diagnostics Complete"
+                    val result = brain.runGeminiDiagnostic()
+                    _geminiDiagnosticResult.value = result
+                    systemExecutionStatus = if (result.isSuccess) "Diagnostic HTTP 200 OK (${result.latencyMs}ms)" else "Diagnostic Failed (${result.statusCategory})"
                 }
                 ActionType.GENERAL_TALK -> {
                     systemExecutionStatus = "Processed"
@@ -243,6 +320,10 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
 
             val finalSpeech = parsedAction.speechResponse
             _lastSpeechText.value = finalSpeech
+
+            // Add MAX response to chat history
+            val maxMsg = ChatMessage(sender = "MAX", text = finalSpeech)
+            _conversationMessages.value = _conversationMessages.value + maxMsg
 
             // Log command
             dao.insertCommandLog(
@@ -258,6 +339,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
             voiceEngine.speak(finalSpeech)
         }
     }
+
 
     fun createNote(title: String, content: String, fileType: String, folder: String) {
         viewModelScope.launch {

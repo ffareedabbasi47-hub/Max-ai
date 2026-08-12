@@ -15,7 +15,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
+import com.example.data.api.diagnostics.GeminiDiagnosticResult
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MaxViewModel
 
@@ -24,7 +26,9 @@ fun SettingsScreen(
     viewModel: MaxViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scrollState = rememberScrollState()
+
 
     var pitch by remember { mutableFloatStateOf(0.85f) }
     var speed by remember { mutableFloatStateOf(1.05f) }
@@ -128,6 +132,9 @@ fun SettingsScreen(
             }
         }
 
+        // Gemini Diagnostic Service Panel
+        GeminiDiagnosticCard(viewModel = viewModel)
+
         // Voice Engine Voice Parameters
         Box(
             modifier = Modifier
@@ -193,7 +200,7 @@ fun SettingsScreen(
             }
         }
 
-        // System Automation Switches
+        // Wake Word Settings Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -202,41 +209,55 @@ fun SettingsScreen(
                 .padding(12.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "WAKE WORD PIPELINE ('MAX')",
+                            color = CyanPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Status: ${if (wakeWordEnabled) "ACTIVE (Listening in background)" else "PAUSED"}",
+                            color = if (wakeWordEnabled) NeonGreenStatus else NeonAmberAlert,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Switch(
+                        checked = wakeWordEnabled,
+                        onCheckedChange = {
+                            wakeWordEnabled = it
+                            viewModel.toggleBackgroundWakeService(context, it)
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary)
+                    )
+
+                }
+
                 Text(
-                    text = "SYSTEM AUTOMATION SETTINGS",
-                    color = CyanPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "When enabled, saying 'Max' or 'Hey Max' will trigger 'Yes, Boss?' and listen for your query.",
+                    color = TextCyanMuted,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Button(
+                    onClick = { viewModel.testWakeWord() },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(text = "Custom 'MAX' Wake-Word Detection", color = TextCyanLight, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Switch(
-                        checked = wakeWordEnabled,
-                        onCheckedChange = { wakeWordEnabled = it },
-                        colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "Autonomous Chat/Email Auto-Reply", color = TextCyanLight, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Switch(
-                        checked = autoReplyEnabled,
-                        onCheckedChange = { autoReplyEnabled = it },
-                        colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary)
-                    )
+                    Text(text = "TEST WAKE WORD ('MAX')", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
             }
         }
+
 
         // Action Buttons
         Button(
@@ -246,6 +267,135 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(text = "CLEAR ALL COMMAND LOGS", fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+@Composable
+fun GeminiDiagnosticCard(
+    viewModel: MaxViewModel
+) {
+    val diagnosticResult by viewModel.geminiDiagnosticResult.collectAsStateWithLifecycle()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(HudSurface, shape = RoundedCornerShape(12.dp))
+            .border(
+                1.dp,
+                if (diagnosticResult?.isSuccess == true) NeonGreenStatus else if (diagnosticResult != null) NeonAmberAlert else HudBorderCyan,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "GEMINI API DIAGNOSTIC SERVICE",
+                    color = CyanPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                if (diagnosticResult != null) {
+                    val badgeColor = if (diagnosticResult!!.isSuccess) NeonGreenStatus else NeonAmberAlert
+                    Surface(
+                        color = badgeColor.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = diagnosticResult!!.statusCategory,
+                            color = badgeColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Verifies real connectivity & responsiveness of Gemini API using BuildConfig.GEMINI_API_KEY. Logs specific error codes on failure rather than falling back to hardcoded responses.",
+                color = TextCyanMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace
+            )
+
+            Button(
+                onClick = {
+                    viewModel.runGeminiDiagnosticCheck()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CyanPrimary,
+                    contentColor = Color.Black
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "PING GEMINI API (RUN DIAGNOSTIC)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            diagnosticResult?.let { res ->
+                HorizontalDivider(color = HudBorderCyan.copy(alpha = 0.5f), thickness = 1.dp)
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Status Code: ${res.statusCode ?: "N/A"}",
+                        color = if (res.isSuccess) NeonGreenStatus else NeonAmberAlert,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Latency: ${res.latencyMs}ms | Model: ${res.modelTested}",
+                        color = TextCyanLight,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Key Source: ${res.apiKeySource}",
+                        color = TextCyanMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+
+                    if (!res.errorMessage.isNullOrBlank()) {
+                        Text(
+                            text = "Error Log Details:\n${res.errorMessage}",
+                            color = Color(0xFFFF6B6B),
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(6.dp))
+                                .padding(8.dp)
+                        )
+                    } else if (!res.rawResponseBody.isNullOrBlank()) {
+                        Text(
+                            text = "Response Preview:\n${res.rawResponseBody.take(150)}...",
+                            color = TextCyanMuted,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(6.dp))
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

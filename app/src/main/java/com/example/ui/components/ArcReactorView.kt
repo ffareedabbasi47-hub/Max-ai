@@ -75,10 +75,11 @@ fun ArcReactorView(
 
     Box(
         modifier = modifier
-            .size(180.dp)
+            .size(130.dp)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = size.minDimension / 2f - 12.dp.toPx()
