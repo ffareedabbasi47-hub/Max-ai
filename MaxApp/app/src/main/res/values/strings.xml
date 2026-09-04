@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MAX</string>
+    <string name="accessibility_service_description">MAX JARVIS Accessibility Engine allows MAX to assist with screen reading, UI element detection, and hands-free guided interactions for Boss.</string>
+</resources>
