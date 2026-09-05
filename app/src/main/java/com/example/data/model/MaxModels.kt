@@ -7,7 +7,8 @@ enum class MaxState {
     LISTENING,
     PROCESSING,
     SPEAKING,
-    EXECUTING
+    EXECUTING,
+    ERROR
 }
 
 data class ChatMessage(
