@@ -42,10 +42,10 @@ jobs:
         # exhaustion signature, not a code error. This only edits the CI runner's throwaway
         # checkout; the committed gradle.properties (and local dev builds) are untouched.
         run: |
-          sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=2/' gradle.properties
-          sed -i 's/org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8/org.gradle.jvmargs=-Xmx2560m -Dfile.encoding=UTF-8/' gradle.properties
+          sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=1/' gradle.properties
+          sed -i 's/org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8/org.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8/' gradle.properties
           sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
-          sed -i 's/kotlin.compiler.execution.strategy=in-process/kotlin.compiler.execution.strategy=daemon/' gradle.properties
+          sed -i 's/kotlin.compiler.execution.strategy=in-process/kotlin.compiler.execution.strategy=in-process/' gradle.properties
           echo "--- gradle.properties as used for this CI run ---"
           cat gradle.properties
 
