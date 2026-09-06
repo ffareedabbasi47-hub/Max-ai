@@ -70,6 +70,7 @@ fun ArcReactorView(
         MaxState.LISTENING -> NeonGreenStatus
         MaxState.PROCESSING -> NeonAmberAlert
         MaxState.SPEAKING -> CyanTertiary
+        MaxState.ERROR -> NeonAmberAlert
         MaxState.EXECUTING -> Color(0xFF00E5FF)
     }
 
