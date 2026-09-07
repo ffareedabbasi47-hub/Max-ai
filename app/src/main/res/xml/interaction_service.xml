@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android:recognitionService intentionally omitted — that requires implementing a separate
+     android.speech.RecognitionService from scratch, a much larger task on its own; omitting it
+     just means the system's own default speech recognizer is used, which is what MAX's
+     existing SpeechRecognizer-based flow already relies on anyway. -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.example.assistant.MaxVoiceInteractionSessionService"
+    android:supportsAssist="true" />
