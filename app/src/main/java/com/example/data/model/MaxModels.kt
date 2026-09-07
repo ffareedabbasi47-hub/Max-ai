@@ -8,6 +8,7 @@ enum class MaxState {
     PROCESSING,
     SPEAKING,
     EXECUTING,
+    VISION_ACTIVE,
     ERROR
 }
 

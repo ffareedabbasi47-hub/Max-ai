@@ -94,6 +94,17 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Mirror Live Mode's state (from the background MaxLiveService, which can keep running
+        // whether or not this ViewModel is alive) into the same _maxState the UI already reads —
+        // so the orb reflects Live Mode without the UI needing to know two state systems exist.
+        viewModelScope.launch {
+            com.example.core.MaxLiveStateBus.state.collect { liveState ->
+                if (com.example.core.MaxLiveConfig.isLiveModeEnabled(getApplication())) {
+                    _maxState.value = liveState
+                }
+            }
+        }
+
         // Observe voice recognizer text
         viewModelScope.launch {
             voiceEngine.speechRecognizedText.collect { text ->
@@ -529,6 +540,34 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
             }
         } catch (e: Exception) {
             val msg = "Could not start background service. Grant microphone permissions, Boss."
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+        }
+    }
+
+    fun toggleLiveMode(context: android.content.Context, enable: Boolean) {
+        com.example.core.MaxLiveConfig.setLiveModeEnabled(context, enable)
+        val intent = android.content.Intent(context, com.example.system.MaxLiveService::class.java)
+        try {
+            if (enable) {
+                // Live Mode and the classic wake service both listen for "MAX" in the background
+                // — running both at once would fight over the mic, so the classic one stops here.
+                context.stopService(android.content.Intent(context, com.example.system.MaxWakeService::class.java))
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                val msg = "Live Mode ON, Boss — real-time voice, say 'MAX' any time."
+                _lastSpeechText.value = msg
+            } else {
+                context.stopService(intent)
+                val msg = "Live Mode OFF, Boss."
+                _lastSpeechText.value = msg
+                voiceEngine.speak(msg)
+            }
+        } catch (e: Exception) {
+            val msg = "Couldn't start Live Mode — check microphone permission and your Gemini API key, Boss."
             _lastSpeechText.value = msg
             voiceEngine.speak(msg)
         }

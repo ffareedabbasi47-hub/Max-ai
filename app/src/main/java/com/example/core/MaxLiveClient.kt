@@ -123,6 +123,25 @@ class MaxLiveClient(
             put(tool("youtube_search", "Search YouTube for a video.", stringParams("query" to "Search query")))
             put(tool("web_search", "Search the web for a query.", stringParams("query" to "Search query")))
             put(tool(
+                "take_photo_and_describe",
+                "Take a photo with the camera to see and describe what's in front of the user.",
+                JSONObject().apply {
+                    put("type", "OBJECT")
+                    put("properties", JSONObject())
+                }
+            ))
+            put(tool(
+                "start_screen_share",
+                "Start watching the user's screen (periodic screenshots) to help with what's " +
+                "currently displayed. Requires a one-time system permission dialog.",
+                JSONObject().apply { put("type", "OBJECT"); put("properties", JSONObject()) }
+            ))
+            put(tool(
+                "stop_screen_share",
+                "Stop watching the user's screen.",
+                JSONObject().apply { put("type", "OBJECT"); put("properties", JSONObject()) }
+            ))
+            put(tool(
                 "end_conversation",
                 "Call this once the user has said goodbye or the conversation has clearly wrapped up — ends Live Mode and returns to background wake-word listening.",
                 JSONObject().apply { put("type", "OBJECT"); put("properties", JSONObject()) }

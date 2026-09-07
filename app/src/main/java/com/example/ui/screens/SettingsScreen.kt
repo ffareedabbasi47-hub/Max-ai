@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -541,6 +540,150 @@ fun SettingsScreen(
                 ) {
                     Text(text = "TEST WAKE WORD ('MAX')", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
+            }
+        }
+
+        // AUDIT FIX: this is what closes the "background wake listening isn't Gemini-live,
+        // voice sounds bad" gap — MaxWakeService above only wakes MainActivity into the old
+        // discrete SpeechRecognizer+TextToSpeech flow; this opens a real, continuous Gemini
+        // Live WebSocket session with Gemini's own natural voice instead of Android's TTS.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            border = BorderStroke(1.dp, Color(0xFFE040FB).copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                var liveModeEnabled by remember { mutableStateOf(com.example.core.MaxLiveConfig.isLiveModeEnabled(context)) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "LIVE MODE (Real-time Gemini voice)",
+                            color = Color(0xFFE040FB),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = if (liveModeEnabled) "ACTIVE — continuous streaming voice" else "OFF — using classic wake word above",
+                            color = if (liveModeEnabled) NeonGreenStatus else TextCyanMuted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Switch(
+                        checked = liveModeEnabled,
+                        onCheckedChange = {
+                            liveModeEnabled = it
+                            wakeWordEnabled = false // the two background listeners can't both hold the mic
+                            viewModel.toggleLiveMode(context, it)
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFE040FB))
+                    )
+                }
+                Text(
+                    text = "Continuous, low-latency conversation with Gemini's own voice, " +
+                        "instead of Android's built-in text-to-speech. Uses whichever Gemini " +
+                        "API key is configured above. Turning this on stops the classic wake " +
+                        "word service — only one can hold the microphone at a time.",
+                    color = TextCyanMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        // Boss identity — injected into every system prompt (both REST and Live Mode) via
+        // BossProfile.buildIdentityPrompt(), so MAX consistently knows who it's actually
+        // talking to instead of treating every session as a stranger.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            border = BorderStroke(1.dp, HudBorderCyan)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "BOSS IDENTITY & PERSONALIZATION",
+                    color = CyanPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "MAX treats this person as its one real Boss — used in every conversation, Live Mode included.",
+                    color = TextCyanMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                var bossName by remember { mutableStateOf(com.example.core.BossProfile.getName(context)) }
+                var bossAge by remember { mutableStateOf(com.example.core.BossProfile.getAge(context)) }
+                var bossGender by remember { mutableStateOf(com.example.core.BossProfile.getGender(context)) }
+                var bossReligion by remember { mutableStateOf(com.example.core.BossProfile.getReligion(context)) }
+                var bossNotes by remember { mutableStateOf(com.example.core.BossProfile.getNotes(context)) }
+
+                OutlinedTextField(
+                    value = bossName,
+                    onValueChange = { bossName = it; com.example.core.BossProfile.setName(context, it) },
+                    label = { Text("Name", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary, unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight, unfocusedTextColor = TextCyanLight
+                    )
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = bossAge,
+                        onValueChange = { bossAge = it; com.example.core.BossProfile.setAge(context, it) },
+                        label = { Text("Age", color = TextCyanMuted, fontSize = 10.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary, unfocusedBorderColor = HudBorderCyan,
+                            focusedTextColor = TextCyanLight, unfocusedTextColor = TextCyanLight
+                        )
+                    )
+                    OutlinedTextField(
+                        value = bossGender,
+                        onValueChange = { bossGender = it; com.example.core.BossProfile.setGender(context, it) },
+                        label = { Text("Gender", color = TextCyanMuted, fontSize = 10.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary, unfocusedBorderColor = HudBorderCyan,
+                            focusedTextColor = TextCyanLight, unfocusedTextColor = TextCyanLight
+                        )
+                    )
+                }
+                OutlinedTextField(
+                    value = bossReligion,
+                    onValueChange = { bossReligion = it; com.example.core.BossProfile.setReligion(context, it) },
+                    label = { Text("Religion", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary, unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight, unfocusedTextColor = TextCyanLight
+                    )
+                )
+                OutlinedTextField(
+                    value = bossNotes,
+                    onValueChange = { bossNotes = it; com.example.core.BossProfile.setNotes(context, it) },
+                    label = { Text("Personalization notes (anything else MAX should know)", color = TextCyanMuted, fontSize = 10.sp) },
+                    placeholder = { Text("e.g. studying engineering, likes cricket, lives in...", color = TextCyanMuted, fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary, unfocusedBorderColor = HudBorderCyan,
+                        focusedTextColor = TextCyanLight, unfocusedTextColor = TextCyanLight
+                    )
+                )
             }
         }
 

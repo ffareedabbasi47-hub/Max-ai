@@ -187,6 +187,13 @@ class MaxVoiceEngine(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PROMPT, "MAX is listening, Sir...")
+            // AUDIT FIX: without these, Android's default silence detection is aggressive
+            // enough to cut off recognition after a very short pause — the "stops listening
+            // after barely a second" complaint. These extend how long MAX keeps listening
+            // through pauses before deciding the user is done talking.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 5000L)
         }
         try {
             speechRecognizer?.startListening(intent)

@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <!--
       AUDIT FIX: QUERY_ALL_PACKAGES is a Play Store-restricted permission — Google requires a
@@ -61,6 +62,41 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Real Gemini Live streaming session — opt-in via Settings "Live Mode" toggle,
+             separate from MaxWakeService (which just wakes MainActivity into the classic
+             discrete STT+TTS flow). Declares mediaProjection too since screen-share capture
+             also runs from this service. -->
+        <service
+            android:name=".system.MaxLiveService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection" />
+
+        <!-- Transparent activities that delegate to the system Camera app / MediaProjection
+             consent dialog for MAX's vision features. -->
+        <activity
+            android:name=".vision.CameraCaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".vision.ScreenCaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Lets CameraCaptureActivity hand the system Camera app a writable file URI without
+             exposing raw file:// paths (required on modern Android for ACTION_IMAGE_CAPTURE). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <service
             android:name=".system.MaxAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -73,6 +109,29 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+        <!--
+          Registers MAX as a candidate "Digital assistant app" — the user must still pick it
+          manually under Settings > Apps > Default apps > Digital assistant app; Android does
+          not allow any app to self-select this role. Once picked, long-press-home / the assist
+          gesture launches MaxVoiceInteractionSessionService instead of Google Assistant.
+        -->
+        <service
+            android:name=".assistant.MaxVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/interaction_service" />
+        </service>
+
+        <service
+            android:name=".assistant.MaxVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
     </application>
 
 </manifest>

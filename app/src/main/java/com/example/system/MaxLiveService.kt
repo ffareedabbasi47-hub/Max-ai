@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +25,11 @@ import com.example.core.MaxLiveClient
 import com.example.core.MaxLiveConfig
 import com.example.core.MaxLiveStateBus
 import com.example.data.model.MaxState
+import com.example.vision.CameraCaptureActivity
+import com.example.vision.ScreenCaptureActivity
+import com.example.vision.ScreenShareBridge
+import com.example.vision.ScreenShareManager
+import com.example.vision.VisionBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +57,7 @@ class MaxLiveService : Service() {
     private var liveClient: MaxLiveClient? = null
     private var audioStreamer: MaxAudioStreamer? = null
     private var isInActiveSession = false
+    private var screenShareManager: ScreenShareManager? = null
 
     private lateinit var systemManager: SystemControlManager
 
@@ -61,7 +69,9 @@ class MaxLiveService : Service() {
         startForeground(
             MaxLiveConfig.LIVE_SERVICE_NOTIFICATION_ID,
             buildNotification(),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            else 0
         )
         MaxLiveStateBus.setServiceArmed(true)
         MaxLiveStateBus.setState(MaxState.IDLE)
@@ -144,11 +154,11 @@ class MaxLiveService : Service() {
         liveClient = MaxLiveClient(
             wsUrl = MaxLiveConfig.liveWsUrl(this),
             systemInstructionText = "You are MAX, a sharp and capable AI agent running on the " +
-                "user's phone in real-time voice mode. Address the user as 'Boss' or 'Sir' " +
-                "occasionally, keep replies short (1-2 sentences), and use your tools for any " +
-                "phone action rather than just describing what you'd do. Speech is transcribed " +
-                "by an on-device recognizer that sometimes mishears — make your best-guess tool " +
-                "call rather than asking the user to repeat themselves.",
+                "user's phone in real-time voice mode. ${com.example.core.BossProfile.buildIdentityPrompt(this)} " +
+                "Keep replies short (1-2 sentences), and use your tools for any phone action " +
+                "rather than just describing what you'd do. Speech is transcribed by an " +
+                "on-device recognizer that sometimes mishears — make your best-guess tool call " +
+                "rather than asking the user to repeat themselves.",
             onAudioReceived = { pcm -> audioStreamer?.playChunk(pcm) },
             onToolCall = { name, id, args -> handleToolCall(name, id, args) },
             onSessionEnded = { if (isInActiveSession) endActiveSession() },
@@ -164,6 +174,8 @@ class MaxLiveService : Service() {
         liveClient?.disconnect()
         liveClient = null
         isInActiveSession = false
+        screenShareManager?.stop()
+        screenShareManager = null
         MaxLiveStateBus.setState(MaxState.IDLE)
         relisten()
     }
@@ -205,6 +217,22 @@ class MaxLiveService : Service() {
                     val opened = systemManager.openWebSearch(args.optString("query"))
                     result.put("message", if (opened) "Opened browser search" else "Couldn't open browser")
                 }
+                "take_photo_and_describe" -> {
+                    handleTakePhoto(id)
+                    return
+                }
+                "start_screen_share" -> {
+                    handleStartScreenShare(id)
+                    return
+                }
+                "stop_screen_share" -> {
+                    screenShareManager?.stop()
+                    screenShareManager = null
+                    if (isInActiveSession) MaxLiveStateBus.setState(MaxState.LISTENING)
+                    result.put("status", "done").put("message", "Stopped watching screen")
+                    liveClient?.sendToolResponse("stop_screen_share", id, result)
+                    return
+                }
                 "end_conversation" -> {
                     liveClient?.sendToolResponse("end_conversation", id, JSONObject().put("status", "ended"))
                     endActiveSession()
@@ -218,6 +246,54 @@ class MaxLiveService : Service() {
         }
         MaxLiveStateBus.setState(MaxState.LISTENING)
         liveClient?.sendToolResponse(name, id, result)
+    }
+
+    /** Camera use is always visible via VISION_ACTIVE state — see HomeScreen's banner. */
+    private fun handleTakePhoto(id: String?) {
+        MaxLiveStateBus.setState(MaxState.VISION_ACTIVE)
+        VisionBridge.awaitNextPhoto { bytes ->
+            val result = JSONObject()
+            if (bytes != null) {
+                liveClient?.sendImageFrame(bytes)
+                result.put("status", "done").put("message", "Photo captured")
+            } else {
+                result.put("status", "error").put("message", "Capture failed or cancelled")
+            }
+            if (isInActiveSession) MaxLiveStateBus.setState(MaxState.LISTENING)
+            liveClient?.sendToolResponse("take_photo_and_describe", id, result)
+        }
+        val launchIntent = Intent(this, CameraCaptureActivity::class.java).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY
+        )
+        if (!runCatching { startActivity(launchIntent) }.isSuccess) {
+            VisionBridge.deliverPhoto(null)
+        }
+    }
+
+    private fun handleStartScreenShare(id: String?) {
+        if (screenShareManager?.isActive == true) {
+            liveClient?.sendToolResponse("start_screen_share", id, JSONObject().put("status", "done").put("message", "Already active"))
+            return
+        }
+        ScreenShareBridge.awaitNextGrant { resultCode, data ->
+            val result = JSONObject()
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val projectionManager = getSystemService(MediaProjectionManager::class.java)
+                screenShareManager = ScreenShareManager(this) { jpeg -> liveClient?.sendImageFrame(jpeg) }
+                    .also { it.start(resultCode, data, projectionManager) }
+                MaxLiveStateBus.setState(MaxState.VISION_ACTIVE)
+                result.put("status", "done").put("message", "Started watching screen")
+            } else {
+                result.put("status", "error").put("message", "Permission denied")
+            }
+            liveClient?.sendToolResponse("start_screen_share", id, result)
+        }
+        val launchIntent = Intent(this, ScreenCaptureActivity::class.java).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY
+        )
+        if (!runCatching { startActivity(launchIntent) }.isSuccess) {
+            ScreenShareBridge.deliverGrant(Activity.RESULT_CANCELED, null)
+        }
     }
 
     // ---- Notification ----------------------------------------------------------------------

@@ -92,7 +92,8 @@ fun HomeScreen(
                     MaxState.PROCESSING -> NeonAmberAlert
                     MaxState.EXECUTING -> Color(0xFF00E5FF)
                     MaxState.SPEAKING -> CyanTertiary
-                    MaxState.ERROR -> NeonAmberAlert
+                    MaxState.VISION_ACTIVE -> Color(0xFFE040FB)
+                    MaxState.ERROR -> Color(0xFFFF5252)
                 }
                 Box(
                     modifier = Modifier
