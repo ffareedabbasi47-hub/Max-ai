@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -550,7 +552,7 @@ fun SettingsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            colors = CardDefaults.cardColors(containerColor = HudSurface),
             border = BorderStroke(1.dp, Color(0xFFE040FB).copy(alpha = 0.5f))
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -603,7 +605,7 @@ fun SettingsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            colors = CardDefaults.cardColors(containerColor = HudSurface),
             border = BorderStroke(1.dp, HudBorderCyan)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
