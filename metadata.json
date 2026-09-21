@@ -1,0 +1,6 @@
+{
+  "name": "MAX - JARVIS AI HUD",
+  "description": "Futuristic JARVIS-style AI assistant with holographic HUD, voice control, system stats, automation, and phone controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
