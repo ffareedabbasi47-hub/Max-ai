@@ -12,8 +12,11 @@ interface WakeWordEngine {
     /** Loads whatever the engine needs (model). Heavy — call off the main thread. Returns false on failure. */
     fun load(): Boolean
 
-    /** Opens the microphone and starts listening. [onWake] and [onError] are called from a background thread. */
-    fun startListening(onWake: () -> Unit, onError: (String) -> Unit)
+    /**
+     * Opens the microphone and starts listening. [onWake] receives the phrase that was heard
+     * ("max", "hey max", "hello max"); both callbacks run on a background thread.
+     */
+    fun startListening(onWake: (String) -> Unit, onError: (String) -> Unit)
 
     /** Stops listening and RELEASES the microphone. Safe to call repeatedly. */
     fun stopListening()

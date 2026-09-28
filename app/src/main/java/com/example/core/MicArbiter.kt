@@ -33,6 +33,19 @@ object MicArbiter {
     private val _owner = MutableStateFlow(MicOwner.NONE)
     val owner: StateFlow<MicOwner> = _owner.asStateFlow()
 
+    private val _speaking = MutableStateFlow(false)
+
+    /**
+     * True while MAX's own voice (TTS) is playing. The wake detector MUST stay off the mic during
+     * this time: otherwise it hears MAX saying "Max"/"Boss..." through the speaker, treats it as a
+     * wake word, cuts MAX's sentence off and starts over. That was the self-trigger loop.
+     */
+    val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
+
+    fun setSpeaking(value: Boolean) {
+        _speaking.value = value
+    }
+
     @Synchronized
     fun acquire(who: MicOwner): Boolean {
         require(who != MicOwner.NONE) { "Use release() to give the microphone up" }
@@ -53,5 +66,6 @@ object MicArbiter {
     @Synchronized
     internal fun resetForTest() {
         _owner.value = MicOwner.NONE
+        _speaking.value = false
     }
 }

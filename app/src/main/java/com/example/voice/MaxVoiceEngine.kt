@@ -86,7 +86,7 @@ class MaxVoiceEngine(
     val errors: SharedFlow<VoiceError> = _errors.asSharedFlow()
 
     private val _voicePitch = MutableStateFlow(0.88f) // Masculine articulate JARVIS tone
-    private val _voiceRate = MutableStateFlow(1.02f)  // Natural speech cadence
+    private val _voiceRate = MutableStateFlow(1.12f)  // Slightly brisk, still natural
 
     private val _selectedLanguage = MutableStateFlow("AUTO") // "hi_IN", "en_IN", "en_US", "AUTO"
     val selectedLanguage: StateFlow<String> = _selectedLanguage
@@ -110,7 +110,7 @@ class MaxVoiceEngine(
             setSpeechRate(_voiceRate.value)
             setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    if (utteranceId != null && utteranceId == currentUtteranceId) _isSpeaking.value = true
+                    if (utteranceId != null && utteranceId == currentUtteranceId) setSpeaking(true)
                 }
 
                 override fun onDone(utteranceId: String?) = finishUtterance(utteranceId)
@@ -125,7 +125,7 @@ class MaxVoiceEngine(
                     // stopSpeaking()/flush clears currentUtteranceId first, so those are ignored.
                     if (utteranceId != null && utteranceId == currentUtteranceId) {
                         currentUtteranceId = null
-                        _isSpeaking.value = false
+                        setSpeaking(false)
                     }
                 }
             })
@@ -137,7 +137,7 @@ class MaxVoiceEngine(
     private fun finishUtterance(utteranceId: String?) {
         if (utteranceId == null || utteranceId != currentUtteranceId) return
         currentUtteranceId = null
-        _isSpeaking.value = false
+        setSpeaking(false)
         onUtteranceFinished()
         if (listenAfterSpeech) {
             listenAfterSpeech = false
@@ -200,19 +200,19 @@ class MaxVoiceEngine(
                 // TTS unavailable: don't hang the flow — go straight to listening if requested.
                 currentUtteranceId = null
                 listenAfterSpeech = false
-                _isSpeaking.value = false
+                setSpeaking(false)
                 if (thenListen) startListeningInternal()
                 return@post
             }
             val id = "MAX_UTTERANCE_${System.nanoTime()}"
             currentUtteranceId = id
             listenAfterSpeech = thenListen
-            _isSpeaking.value = true
+            setSpeaking(true)
             val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
             if (result != TextToSpeech.SUCCESS) {
                 currentUtteranceId = null
                 listenAfterSpeech = false
-                _isSpeaking.value = false
+                setSpeaking(false)
                 if (thenListen) startListeningInternal()
             }
         }
@@ -230,7 +230,7 @@ class MaxVoiceEngine(
         } catch (e: Exception) {
             // ignore
         }
-        _isSpeaking.value = false
+        setSpeaking(false)
     }
 
     // ---------------------------------------------------------------------------------------
@@ -261,8 +261,8 @@ class MaxVoiceEngine(
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
             // Only hints — recognizers may ignore them. The real fix for "stops after 1 second"
             // is that partial results no longer trigger a request (see class doc).
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
         }
 
     private fun startListeningInternal() {
@@ -421,6 +421,12 @@ class MaxVoiceEngine(
         _micState.value = state
         _isListening.value = state == MicState.LISTENING
         if (state == MicState.OFF) MicArbiter.release(MicOwner.ASSISTANT)
+    }
+
+    /** Mirrors "MAX is talking" into the mic arbiter so the wake detector stays quiet meanwhile. */
+    private fun setSpeaking(value: Boolean) {
+        _isSpeaking.value = value
+        MicArbiter.setSpeaking(value)
     }
 
     private fun emitError(error: VoiceError) {

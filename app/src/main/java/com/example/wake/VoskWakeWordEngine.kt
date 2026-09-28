@@ -14,7 +14,7 @@ import java.io.File
 
 /**
  * On-device wake word using Vosk (free, offline, Apache-2.0) restricted to a tiny grammar:
- * only "hey max", "max", "okay max" (everything else maps to [unk]). Audio is read from the mic in
+ * only "hey max", "hello max", "okay max", "max" (everything else maps to [unk]). Audio is read from the mic in
  * 100 ms chunks, fed to the local recognizer and thrown away. Nothing is stored or uploaded.
  *
  * Honest limits: this runs on the CPU, not on the phone's always-on DSP (that hardware path is
@@ -41,7 +41,7 @@ class VoskWakeWordEngine(
     }
 
     @Synchronized
-    override fun startListening(onWake: () -> Unit, onError: (String) -> Unit) {
+    override fun startListening(onWake: (String) -> Unit, onError: (String) -> Unit) {
         if (running) return
         val m = model
         if (m == null) { onError("Wake model load nahi hua"); return }
@@ -54,7 +54,7 @@ class VoskWakeWordEngine(
         t.start()
     }
 
-    private fun runLoop(m: Model, onWake: () -> Unit, onError: (String) -> Unit) {
+    private fun runLoop(m: Model, onWake: (String) -> Unit, onError: (String) -> Unit) {
         var record: AudioRecord? = null
         var recognizer: Recognizer? = null
         try {
@@ -76,15 +76,29 @@ class VoskWakeWordEngine(
                 return
             }
             val chunk = ShortArray(SAMPLE_RATE / 10)
+            var lastPartial = ""
+            var stable = 0
             while (running) {
                 val n = record.read(chunk, 0, chunk.size)
                 if (n < 0) { onError("Mic read error ($n)"); return }
                 if (n == 0) continue
-                val json = if (recognizer.acceptWaveForm(chunk, n)) recognizer.result else recognizer.partialResult
-                if (WakePhrase.matchesRestrictedGrammar(WakePhrase.extractVoskText(json))) {
-                    running = false
-                    onWake()
-                    return
+                val isFinal = recognizer.acceptWaveForm(chunk, n)
+                val text = WakePhrase.extractVoskText(if (isFinal) recognizer.result else recognizer.partialResult)
+                if (WakePhrase.matchesRestrictedGrammar(text)) {
+                    // A finished utterance fires immediately. A partial must repeat on two
+                    // consecutive 100 ms chunks first, so a single noisy blip can't wake MAX.
+                    if (!isFinal) {
+                        stable = if (text == lastPartial) stable + 1 else 1
+                        lastPartial = text
+                    }
+                    if (isFinal || stable >= 2) {
+                        running = false
+                        onWake(text)
+                        return
+                    }
+                } else {
+                    stable = 0
+                    lastPartial = ""
                 }
             }
         } catch (e: Throwable) {
@@ -116,6 +130,6 @@ class VoskWakeWordEngine(
 
     companion object {
         private const val SAMPLE_RATE = 16000
-        private const val GRAMMAR = "[\"hey max\", \"okay max\", \"max\", \"[unk]\"]"
+        private const val GRAMMAR = "[\"hey max\", \"hello max\", \"okay max\", \"max\", \"[unk]\"]"
     }
 }

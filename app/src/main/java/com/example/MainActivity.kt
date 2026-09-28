@@ -36,12 +36,15 @@ class MainActivity : ComponentActivity() {
 
     // A wake intent can arrive in onCreate before the ViewModel exists; hold it and deliver once.
     private var pendingWake = false
+    private var pendingGreeting = false
 
     private val wakeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == MaxWakeService.ACTION_WAKE_WORD_DETECTED) {
                 // De-duplicated inside the ViewModel (the wake service also sends an activity intent).
-                maxViewModelInstance?.onWakeDetected()
+                maxViewModelInstance?.onWakeDetected(
+                    greeting = intent.getBooleanExtra(MaxWakeService.EXTRA_GREETING, false)
+                )
             }
         }
     }
@@ -67,7 +70,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     if (pendingWake) {
                         pendingWake = false
-                        maxViewModel.onWakeDetected()
+                        maxViewModel.onWakeDetected(greeting = pendingGreeting)
                     }
                 }
 
@@ -150,8 +153,15 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("WAKE_WORD_TRIGGERED", false)) {
             // Consume the extra so a re-delivered intent (rotation, recents) can't re-trigger.
             intent.removeExtra("WAKE_WORD_TRIGGERED")
+            val greeting = intent.getBooleanExtra(MaxWakeService.EXTRA_GREETING, false)
+            intent.removeExtra(MaxWakeService.EXTRA_GREETING)
             val vm = maxViewModelInstance
-            if (vm != null) vm.onWakeDetected() else pendingWake = true
+            if (vm != null) {
+                vm.onWakeDetected(greeting = greeting)
+            } else {
+                pendingWake = true
+                pendingGreeting = greeting
+            }
         }
     }
 

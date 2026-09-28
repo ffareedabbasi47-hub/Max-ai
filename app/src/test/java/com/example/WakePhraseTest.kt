@@ -66,3 +66,21 @@ class VoskWakeParsingTest {
         assertFalse(WakePhrase.matchesRestrictedGrammar("maximum"))
     }
 }
+
+class HelloMaxTest {
+    @Test
+    fun `hello max is a wake phrase and is stripped from the command`() {
+        assertTrue(WakePhrase.startsWithWake("Hello Max"))
+        assertTrue(WakePhrase.isWakeOnly("hello max"))
+        assertEquals("open YouTube", WakePhrase.stripWake("Hello Max open YouTube"))
+    }
+
+    @Test
+    fun `salam greeting only for messages that start with hello`() {
+        assertTrue(WakePhrase.startsWithHello("Hello"))
+        assertTrue(WakePhrase.startsWithHello("hello max what time is it"))
+        assertFalse(WakePhrase.startsWithHello("hey max hello"))
+        assertFalse(WakePhrase.startsWithHello("open youtube"))
+        assertFalse(WakePhrase.startsWithHello("helloworld app"))
+    }
+}

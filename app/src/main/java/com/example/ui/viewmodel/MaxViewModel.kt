@@ -275,18 +275,44 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
      * broadcast and an activity intent, and used to fire it repeatedly, so it is de-duplicated
      * here: ignored while the mic is already in use or if one was handled a moment ago.
      */
-    fun onWakeDetected(force: Boolean = false) {
+    fun onWakeDetected(force: Boolean = false, greeting: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
         if (!force) {
             if (now - lastWakeAtMs < WAKE_DEBOUNCE_MS) return
             if (voiceEngine.micState.value != MicState.OFF) return
+            // A "wake" while MAX itself is talking is MAX hearing its own voice. Never let that
+            // cut the sentence off (this was the self-trigger loop).
+            if (voiceEngine.isSpeaking.value) return
         }
         lastWakeAtMs = now
-        voiceEngine.stopSpeaking()
-        _lastSpeechText.value = WAKE_ACK
-        // Acknowledge, then open the mic when the acknowledgement has FINISHED (no fixed delay,
-        // no listening over our own voice). State becomes LISTENING only once the mic is really open.
-        voiceEngine.speak(WAKE_ACK, thenListen = true)
+        if (force) voiceEngine.stopSpeaking()
+        if (greeting) {
+            // Greeting rule: "Hello" / "Hello Max" -> reply starts with the Salam, then listen.
+            _lastSpeechText.value = GREETING
+            voiceEngine.speak(GREETING, thenListen = true)
+        } else {
+            // Short chime instead of a spoken "yes?" — about a second faster, and there is no
+            // spoken word for the wake detector to mistake for a wake phrase.
+            _lastSpeechText.value = WAKE_ACK
+            playWakeChime()
+            viewModelScope.launch {
+                delay(CHIME_MS)
+                voiceEngine.startListening()
+            }
+        }
+    }
+
+    private fun playWakeChime() {
+        try {
+            val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 70)
+            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 110)
+            viewModelScope.launch {
+                delay(500)
+                tone.release()
+            }
+        } catch (e: Exception) {
+            // No chime is fine; listening still starts.
+        }
     }
 
     /** Settings "test wake word" button. */
@@ -319,13 +345,15 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         val heard = text.trim()
         if (heard.isEmpty()) return
         if (WakePhrase.isWakeOnly(heard)) {
-            // Only "Max" was said — acknowledge and keep listening for the actual command.
-            _lastSpeechText.value = WAKE_ACK
-            voiceEngine.speak(WAKE_ACK, thenListen = true)
+            // Only "Max" / "Hello Max" was said — acknowledge and keep listening for the command.
+            onWakeDetected(force = true, greeting = WakePhrase.startsWithHello(heard))
             return
         }
-        executePrompt(WakePhrase.stripWake(heard))
+        executePrompt(WakePhrase.stripWake(heard), greeting = WakePhrase.startsWithHello(heard))
     }
+
+    private fun withGreeting(body: String, greeting: Boolean): String =
+        if (greeting && !body.startsWith("Assalam", ignoreCase = true)) "$GREETING. $body" else body
 
     private fun handleVoiceError(error: VoiceError) {
         _lastSpeechText.value = error.message
@@ -341,7 +369,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun executePrompt(userPrompt: String) {
+    fun executePrompt(userPrompt: String, greeting: Boolean = WakePhrase.startsWithHello(userPrompt)) {
         if (userPrompt.isBlank()) return
         _userInputQuery.value = ""
         _maxState.value = MaxState.PROCESSING
@@ -351,6 +379,27 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         _conversationMessages.value = _conversationMessages.value + userMsg
 
         viewModelScope.launch {
+            // Simple commands (open an app, time, date) run fully OFFLINE and instantly — no
+            // internet, no AI call. Anything else goes to the AI as before.
+            val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                com.example.tools.OfflineCommandRouter.handle(getApplication<android.app.Application>(), userPrompt)
+            }
+            if (local != null) {
+                val speech = withGreeting(local.spoken, greeting)
+                _lastSpeechText.value = speech
+                _conversationMessages.value = _conversationMessages.value + ChatMessage(sender = "MAX", text = speech)
+                dao.insertCommandLog(
+                    CommandLogEntity(
+                        prompt = userPrompt,
+                        response = speech,
+                        actionType = "OFFLINE_COMMAND",
+                        status = if (local.success) "Executed" else "Failed"
+                    )
+                )
+                voiceEngine.speak(speech)
+                return@launch
+            }
+
             // Brain logic evaluation
             val parsedAction = brain.processUserPrompt(userPrompt)
             _isFallbackActive.value = parsedAction.isFallback
@@ -373,6 +422,8 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                 ActionType.OPEN_APP -> {
                     val statusMsg = systemManager.openAppByName(parsedAction.target)
                     systemExecutionStatus = statusMsg
+                    // Speak what REALLY happened (found / not found), not the AI's guess.
+                    spokenOverride = statusMsg
                 }
                 ActionType.TOGGLE_SETTINGS -> {
                     val statusMsg = systemManager.toggleSystemSetting(parsedAction.target)
@@ -462,7 +513,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            val finalSpeech = spokenOverride ?: parsedAction.speechResponse
+            val finalSpeech = withGreeting(spokenOverride ?: parsedAction.speechResponse, greeting)
             _lastSpeechText.value = finalSpeech
 
             // Add MAX response to chat history
@@ -617,6 +668,8 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val WAKE_ACK = "Ji Boss, boliye?"
+        const val GREETING = "Assalam Walekum"
+        const val CHIME_MS = 180L
         const val WAKE_DEBOUNCE_MS = 4000L
     }
 }

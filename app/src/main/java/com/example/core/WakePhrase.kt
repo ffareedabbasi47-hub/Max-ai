@@ -9,10 +9,15 @@ package com.example.core
 object WakePhrase {
 
     /** Leading wake phrase, e.g. "Max", "hey max,", "OK Max!" — plus trailing punctuation/space. */
-    private val LEADING = Regex("""^\s*(?:(?:hey|hi|ok|okay)\s+)?max\b[\s,.!?:;\-]*""", RegexOption.IGNORE_CASE)
+    private val LEADING = Regex("""^\s*(?:(?:hey|hello|hi|ok|okay)\s+)?max\b[\s,.!?:;\-]*""", RegexOption.IGNORE_CASE)
 
     /** "hey max" anywhere in the utterance (used by the background detector). */
-    private val HEY_MAX_ANYWHERE = Regex("""\b(?:hey|hi|ok|okay)\s+max\b""", RegexOption.IGNORE_CASE)
+    private val HEY_MAX_ANYWHERE = Regex("""\b(?:hey|hello|hi|ok|okay)\s+max\b""", RegexOption.IGNORE_CASE)
+
+    private val STARTS_HELLO = Regex("""^\s*hello\b""", RegexOption.IGNORE_CASE)
+
+    /** MAX's greeting rule: only messages that start with "Hello" / "Hello Max" get the Salam. */
+    fun startsWithHello(text: String): Boolean = STARTS_HELLO.containsMatchIn(text)
 
     fun startsWithWake(text: String): Boolean = LEADING.containsMatchIn(text)
 

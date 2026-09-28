@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.core.MicArbiter
 import com.example.core.MicOwner
+import com.example.core.WakePhrase
 import com.example.wake.VoskWakeWordEngine
 import com.example.wake.WakeModelManager
 import com.example.wake.WakeStatus
@@ -29,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -59,6 +61,7 @@ class MaxWakeService : Service() {
     private var running = false
     private var cooldownUntilMs = 0L
     private var pendingStart: Runnable? = null
+    private var wasSpeaking = false
 
     override fun onCreate() {
         super.onCreate()
@@ -115,7 +118,22 @@ class MaxWakeService : Service() {
         arbiterJob?.cancel()
         // Emits the current owner immediately. NONE -> listen; ASSISTANT/LIVE -> stay off the mic.
         arbiterJob = scope.launch {
-            MicArbiter.owner.collect { owner ->
+            combine(MicArbiter.owner, MicArbiter.speaking) { owner, speaking -> owner to speaking }
+                .collect { (owner, speaking) ->
+                // MAX's own voice is playing: stay OFF the mic, or we would hear "Max"/"Boss" from
+                // our own speaker, treat it as a wake word and cut the sentence off (the old loop).
+                if (speaking) {
+                    wasSpeaking = true
+                    cancelPendingStart()
+                    stopDetector(releaseMic = true)
+                    updateStatus("MAX bol raha hai")
+                    return@collect
+                }
+                if (wasSpeaking) {
+                    wasSpeaking = false
+                    // Let the speaker tail / room echo die out before listening again.
+                    cooldownUntilMs = maxOf(cooldownUntilMs, SystemClock.elapsedRealtime() + SPEAK_TAIL_MS)
+                }
                 when (owner) {
                     MicOwner.ASSISTANT, MicOwner.LIVE -> {
                         cancelPendingStart()
@@ -146,11 +164,12 @@ class MaxWakeService : Service() {
     private fun startDetector() {
         val eng = engine ?: return
         if (!running || detecting) return
+        if (MicArbiter.speaking.value) return // never listen while MAX is talking
         if (!MicArbiter.acquire(MicOwner.WAKE)) return // assistant/Live has the mic; observer retries later
         detecting = true
         updateStatus("Hey Max / Max sun raha hai (sirf phone ke andar)")
         eng.startListening(
-            onWake = { mainHandler.post { onWakeDetected() } },
+            onWake = { phrase -> mainHandler.post { onWakeDetected(phrase) } },
             onError = { msg -> mainHandler.post { onDetectorError(msg) } }
         )
     }
@@ -164,14 +183,15 @@ class MaxWakeService : Service() {
         if (releaseMic) MicArbiter.release(MicOwner.WAKE)
     }
 
-    private fun onWakeDetected() {
+    private fun onWakeDetected(phrase: String) {
         if (!detecting) return
         Log.i(TAG, "Wake phrase detected")
+        val greeting = WakePhrase.startsWithHello(phrase)
         cooldownUntilMs = SystemClock.elapsedRealtime() + WAKE_COOLDOWN_MS
         detecting = false
         MicArbiter.release(MicOwner.WAKE) // engine already released its AudioRecord and exited
 
-        sendBroadcast(Intent(ACTION_WAKE_WORD_DETECTED).setPackage(packageName))
+        sendBroadcast(Intent(ACTION_WAKE_WORD_DETECTED).setPackage(packageName).putExtra(EXTRA_GREETING, greeting))
 
         // Android 10+ may silently block starting an activity from the background; the broadcast
         // above covers the case where MAX is already visible. The default-assistant role (roadmap)
@@ -179,6 +199,7 @@ class MaxWakeService : Service() {
         val activityIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("WAKE_WORD_TRIGGERED", true)
+            putExtra(EXTRA_GREETING, greeting)
         }
         try {
             startActivity(activityIntent)
@@ -254,6 +275,8 @@ class MaxWakeService : Service() {
         const val CHANNEL_ID = "max_jarvis_wake_channel"
         const val NOTIFICATION_ID = 2001
         const val ACTION_WAKE_WORD_DETECTED = "com.example.MAX_WAKE_WORD_EVENT"
-        private const val WAKE_COOLDOWN_MS = 6000L
+        const val EXTRA_GREETING = "WAKE_GREETING"
+        private const val WAKE_COOLDOWN_MS = 3000L
+        private const val SPEAK_TAIL_MS = 1200L
     }
 }
