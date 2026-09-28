@@ -46,3 +46,23 @@ class WakePhraseTest {
         assertFalse(WakePhrase.isWakeOnly("open youtube"))
     }
 }
+
+class VoskWakeParsingTest {
+    @Test
+    fun `extracts text and partial from vosk json`() {
+        assertEquals("hey max", WakePhrase.extractVoskText("{\n  \"text\" : \"hey max\"\n}"))
+        assertEquals("max", WakePhrase.extractVoskText("{\"partial\" : \"max\"}"))
+        assertEquals("", WakePhrase.extractVoskText("{\"partial\" : \"\"}"))
+        assertEquals("", WakePhrase.extractVoskText("garbage"))
+    }
+
+    @Test
+    fun `restricted grammar matches only when max was heard`() {
+        assertTrue(WakePhrase.matchesRestrictedGrammar("max"))
+        assertTrue(WakePhrase.matchesRestrictedGrammar("hey max"))
+        assertTrue(WakePhrase.matchesRestrictedGrammar("[unk] max"))
+        assertFalse(WakePhrase.matchesRestrictedGrammar("[unk]"))
+        assertFalse(WakePhrase.matchesRestrictedGrammar(""))
+        assertFalse(WakePhrase.matchesRestrictedGrammar("maximum"))
+    }
+}

@@ -141,6 +141,9 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
+  // On-device wake word (free, offline). JNA must be the @aar so its native lib is packaged.
+  implementation("net.java.dev.jna:jna:5.13.0@aar")
+  implementation("com.alphacephei:vosk-android:0.3.47")
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

@@ -24,4 +24,16 @@ object WakePhrase {
 
     /** True if the user said only the wake phrase and nothing else ("Max", "hey max!"). */
     fun isWakeOnly(text: String): Boolean = startsWithWake(text) && stripWake(text).isEmpty()
+
+    private val VOSK_TEXT = Regex("\"(?:text|partial)\"\\s*:\\s*\"([^\"]*)\"")
+
+    /** Pulls the transcript out of a Vosk result/partial JSON string without needing org.json. */
+    fun extractVoskText(json: String): String = VOSK_TEXT.find(json)?.groupValues?.get(1)?.trim().orEmpty()
+
+    /**
+     * For the wake detector, whose recognizer is restricted to "hey max" / "okay max" / "max" / [unk]:
+     * the word "max" appearing at all means the wake phrase was heard.
+     */
+    fun matchesRestrictedGrammar(text: String): Boolean =
+        text.split(' ').any { it.equals("max", ignoreCase = true) }
 }
