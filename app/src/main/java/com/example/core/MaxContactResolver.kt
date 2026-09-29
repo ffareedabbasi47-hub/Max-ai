@@ -49,7 +49,7 @@ object MaxContactResolver {
         // Missing permission or any query failure just yields an empty list — callers report
         // "contact not found" rather than crashing or silently guessing.
 
-        cache = contacts
+        if (contacts.isNotEmpty()) cache = contacts
         return contacts
     }
 

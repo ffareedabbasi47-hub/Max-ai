@@ -86,7 +86,47 @@ class MaxAccessibilityService : AccessibilityService() {
         return clicked
     }
 
+    /**
+     * Presses WhatsApp's Send button. Looks up the button by its view id first, then by its
+     * accessibility label. Reads nothing else from the screen. Returns true only if a click ran.
+     */
+    fun clickSendButton(pkg: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        try {
+            if (clickFirstClickable(root.findAccessibilityNodeInfosByViewId("$pkg:id/send"))) return true
+            for (label in SEND_LABELS) {
+                val exact = root.findAccessibilityNodeInfosByText(label)
+                    ?.filter { it.contentDescription?.toString()?.trim().equals(label, ignoreCase = true) }
+                if (clickFirstClickable(exact)) return true
+            }
+            return false
+        } finally {
+            root.recycle()
+        }
+    }
+
+    /** True while WhatsApp's Send button is still on screen (it turns into the mic once the box is empty). */
+    fun hasSendButton(pkg: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return try {
+            !root.findAccessibilityNodeInfosByViewId("$pkg:id/send").isNullOrEmpty()
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun clickFirstClickable(nodes: List<AccessibilityNodeInfo>?): Boolean {
+        if (nodes.isNullOrEmpty()) return false
+        for (node in nodes) {
+            val target = if (node.isClickable) node else node.parent?.takeIf { it.isClickable }
+            if (target != null && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        }
+        return false
+    }
+
     companion object {
+        private val SEND_LABELS = listOf("Send", "भेजें", "भेजिए", "ارسال", "بھیجیں", "Enviar")
+
         var instance: MaxAccessibilityService? = null
             private set
         var currentActivePackage: String? = null

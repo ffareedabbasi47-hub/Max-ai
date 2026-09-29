@@ -47,6 +47,43 @@ object OfflineCommandRouter {
         return target
     }
 
+    private val CALL_EN = Regex(
+        """^\s*(?:please\s+)?(?:call|phone|dial|ring)\s+(.+?)\s*[.!?]*\s*$""", RegexOption.IGNORE_CASE
+    )
+    private val CALL_HI = Regex(
+        """^\s*(?:please\s+)?(.+?)\s+ko\s+(?:phone|call|fon)(?:\s+(?:karo|kar\s+do|kar\s+de|lagao|laga\s+do|laga\s+de|kijiye|kariye))?\s*[.!?]*\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val WA_EN_1 = Regex(
+        """^\s*(?:please\s+)?(?:send\s+(?:a\s+)?)?(?:whatsapp|message|text)(?:\s+message)?\s+(?:to\s+)?(.+?)\s+(?:saying|that\s+says|says|that)\s+(.+?)\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val WA_EN_2 = Regex(
+        """^\s*(?:please\s+)?send\s+(?:a\s+)?message\s+to\s+(.+?)\s+(?:on|in|via)\s+whatsapp\s+(?:saying|that)\s+(.+?)\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+    private val WA_HI = Regex(
+        """^\s*(?:please\s+)?(.+?)\s+ko\s+(?:whatsapp|message|msg|text)(?:\s+(?:par|pe))?(?:\s+(?:karo|bhejo|kar\s+do|bhej\s+do|likho|kijiye))?\s*(?:ki\b|ke\s+ki\b|:)\s*(.+?)\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** "call Rahul" / "Rahul ko call karo" -> "Rahul"; null for anything else (or compound requests). */
+    fun parseCallTarget(text: String): String? {
+        val name = (CALL_EN.find(text) ?: CALL_HI.find(text))?.groupValues?.get(1)?.trim().orEmpty()
+        if (name.isEmpty() || name.split(' ').size > 4) return null
+        if (COMPOUND.containsMatchIn(name)) return null
+        return name
+    }
+
+    /** "send whatsapp to Rahul saying I am late" / "Rahul ko whatsapp karo ki main late hoon" -> (name, message). */
+    fun parseWhatsApp(text: String): Pair<String, String>? {
+        val m = WA_EN_2.find(text) ?: WA_EN_1.find(text) ?: WA_HI.find(text) ?: return null
+        val name = m.groupValues[1].trim()
+        val message = m.groupValues[2].trim().trimEnd('.', '!', '?', ' ')
+        if (name.isEmpty() || message.isEmpty() || name.split(' ').size > 4) return null
+        return name to message
+    }
+
     fun isTimeQuery(text: String) = TIME_Q.containsMatchIn(text)
     fun isDateQuery(text: String) = DATE_Q.containsMatchIn(text)
 

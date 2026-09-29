@@ -13,7 +13,12 @@ import com.example.system.InstalledAppInfo
 import com.example.system.MaxAccessibilityService
 import com.example.system.SystemControlManager
 import com.example.system.SystemTelemetry
+import com.example.core.MaxContact
 import com.example.core.WakePhrase
+import com.example.tools.ConfirmationWords
+import com.example.tools.ContactActions
+import com.example.tools.ContactLookup
+import com.example.tools.OfflineCommandRouter
 import com.example.voice.MaxVoiceEngine
 import com.example.voice.MicState
 import com.example.voice.VoiceError
@@ -81,6 +86,14 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
 
     private var telemetryJob: Job? = null
     private var errorResetJob: Job? = null
+
+    /** An action MAX has proposed and is waiting for a spoken/typed yes/no on. */
+    private sealed class PendingAction {
+        data class Call(val contact: MaxContact) : PendingAction()
+        data class WhatsApp(val contact: MaxContact, val message: String) : PendingAction()
+    }
+    private var pending: PendingAction? = null
+    private var pendingExpiresAt = 0L
     private var lastWakeAtMs = 0L
 
     init {
@@ -352,6 +365,88 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         executePrompt(WakePhrase.stripWake(heard), greeting = WakePhrase.startsWithHello(heard))
     }
 
+    /** Shows, logs and speaks MAX's reply. [thenListen] reopens the mic afterwards (for questions). */
+    private suspend fun respond(
+        prompt: String,
+        speech: String,
+        actionType: String,
+        status: String,
+        greeting: Boolean = false,
+        thenListen: Boolean = false
+    ) {
+        val text = withGreeting(speech, greeting)
+        _lastSpeechText.value = text
+        _conversationMessages.value = _conversationMessages.value + ChatMessage(sender = "MAX", text = text)
+        dao.insertCommandLog(CommandLogEntity(prompt = prompt, response = text, actionType = actionType, status = status))
+        voiceEngine.speak(text, thenListen = thenListen)
+    }
+
+    private suspend fun askConfirmation(
+        prompt: String, question: String, action: PendingAction, actionType: String, greeting: Boolean
+    ) {
+        pending = action
+        pendingExpiresAt = SystemClock.elapsedRealtime() + CONFIRM_WINDOW_MS
+        respond(prompt, question, actionType, "AwaitingConfirmation", greeting, thenListen = true)
+    }
+
+    private suspend fun handleCall(prompt: String, name: String, greeting: Boolean) {
+        if (name.isBlank()) {
+            respond(prompt, "Kisko call karna hai? Naam ke saath bolo.", "MAKE_CALL", "NeedsInfo", greeting)
+            return
+        }
+        val app = getApplication<android.app.Application>()
+        when (val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { ContactActions.lookup(app, name) }) {
+            is ContactLookup.NoAccess -> respond(prompt, found.spoken, "MAKE_CALL", "NoPermission", greeting)
+            is ContactLookup.NotFound -> respond(prompt, found.spoken, "MAKE_CALL", "NotFound", greeting)
+            is ContactLookup.Found ->
+                if (found.confident) {
+                    runPending(PendingAction.Call(found.contact), prompt, greeting)
+                } else {
+                    askConfirmation(
+                        prompt, "Kya aap ${found.contact.name} ko call karna chahte hain? Haan ya nahi bolo.",
+                        PendingAction.Call(found.contact), "MAKE_CALL", greeting
+                    )
+                }
+        }
+    }
+
+    private suspend fun handleWhatsApp(prompt: String, name: String, message: String, greeting: Boolean) {
+        if (name.isBlank() || message.isBlank()) {
+            respond(
+                prompt,
+                "Kisko aur kya message bhejna hai? Aise bolo: Rahul ko WhatsApp karo ki main late hoon.",
+                "SEND_WHATSAPP", "NeedsInfo", greeting
+            )
+            return
+        }
+        val app = getApplication<android.app.Application>()
+        when (val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { ContactActions.lookup(app, name) }) {
+            is ContactLookup.NoAccess -> respond(prompt, found.spoken, "SEND_WHATSAPP", "NoPermission", greeting)
+            is ContactLookup.NotFound -> respond(prompt, found.spoken, "SEND_WHATSAPP", "NotFound", greeting)
+            // A message can't be un-sent and speech recognition can mishear, so ALWAYS read it back first.
+            is ContactLookup.Found -> askConfirmation(
+                prompt, "${found.contact.name} ko WhatsApp par bhejun: $message. Haan ya nahi?",
+                PendingAction.WhatsApp(found.contact, message), "SEND_WHATSAPP", greeting
+            )
+        }
+    }
+
+    private suspend fun runPending(action: PendingAction, prompt: String, greeting: Boolean) {
+        _maxState.value = MaxState.EXECUTING
+        val app = getApplication<android.app.Application>()
+        val (type, result) = when (action) {
+            is PendingAction.Call ->
+                "MAKE_CALL" to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    ContactActions.placeCall(app, action.contact)
+                }
+            is PendingAction.WhatsApp ->
+                "SEND_WHATSAPP" to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    ContactActions.sendWhatsApp(app, action.contact, action.message)
+                }
+        }
+        respond(prompt, result.spoken, type, if (result.success) "Executed" else "Failed", greeting)
+    }
+
     private fun withGreeting(body: String, greeting: Boolean): String =
         if (greeting && !body.startsWith("Assalam", ignoreCase = true)) "$GREETING. $body" else body
 
@@ -379,6 +474,28 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         _conversationMessages.value = _conversationMessages.value + userMsg
 
         viewModelScope.launch {
+            // 1) Is this the answer to a question MAX just asked ("Rahul ko call karun?")?
+            val waiting = pending
+            if (waiting != null) {
+                pending = null
+                if (SystemClock.elapsedRealtime() <= pendingExpiresAt) {
+                    when (ConfirmationWords.classify(userPrompt)) {
+                        ConfirmationWords.Answer.YES -> { runPending(waiting, userPrompt, greeting); return@launch }
+                        ConfirmationWords.Answer.NO -> {
+                            respond(userPrompt, "Theek hai, cancel kar diya.", "CONFIRMATION", "Cancelled", greeting)
+                            return@launch
+                        }
+                        ConfirmationWords.Answer.OTHER -> Unit // new command; the old question is dropped
+                    }
+                }
+            }
+
+            // 2) Calls and WhatsApp messages: parsed on the phone (fast), then confirmed / executed.
+            val callName = OfflineCommandRouter.parseCallTarget(userPrompt)
+            if (callName != null) { handleCall(userPrompt, callName, greeting); return@launch }
+            val wa = OfflineCommandRouter.parseWhatsApp(userPrompt)
+            if (wa != null) { handleWhatsApp(userPrompt, wa.first, wa.second, greeting); return@launch }
+
             // Simple commands (open an app, time, date) run fully OFFLINE and instantly — no
             // internet, no AI call. Anything else goes to the AI as before.
             val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -430,16 +547,16 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
                     systemExecutionStatus = statusMsg
                 }
                 ActionType.SEND_WHATSAPP -> {
-                    systemManager.sendWhatsAppMessage(parsedAction.target, parsedAction.details.ifEmpty { userPrompt })
-                    systemExecutionStatus = "WhatsApp Dispatched"
+                    handleWhatsApp(userPrompt, parsedAction.target, parsedAction.details.trim(), greeting)
+                    return@launch
                 }
                 ActionType.DRAFT_EMAIL -> {
                     systemManager.draftEmail(parsedAction.target, parsedAction.details.ifEmpty { userPrompt })
                     systemExecutionStatus = "Email Client Opened"
                 }
                 ActionType.MAKE_CALL -> {
-                    systemManager.makeCall(parsedAction.target)
-                    systemExecutionStatus = "Call Link Placed"
+                    handleCall(userPrompt, parsedAction.target, greeting)
+                    return@launch
                 }
                 ActionType.CREATE_FILE -> {
                     val fileName = if (parsedAction.target.isNotBlank()) parsedAction.target else "Max_Document_${System.currentTimeMillis() % 1000}.txt"
@@ -670,6 +787,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         const val WAKE_ACK = "Ji Boss, boliye?"
         const val GREETING = "Assalam Walekum"
         const val CHIME_MS = 180L
+        const val CONFIRM_WINDOW_MS = 45_000L
         const val WAKE_DEBOUNCE_MS = 4000L
     }
 }

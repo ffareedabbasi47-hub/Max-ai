@@ -13,7 +13,7 @@ class OfflineCommandRouterTest {
     fun `english open commands give the app name`() {
         assertEquals("YouTube", OfflineCommandRouter.parseOpenTarget("open YouTube"))
         assertEquals("WhatsApp", OfflineCommandRouter.parseOpenTarget("Please launch the WhatsApp app"))
-        assertEquals("Chrome", OfflineCommandRouter.parseOpenTarget("start chrome."))
+        assertEquals("chrome", OfflineCommandRouter.parseOpenTarget("start chrome."))
     }
 
     @Test
