@@ -726,24 +726,49 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleBackgroundWakeService(context: android.content.Context, enable: Boolean) {
         val intent = android.content.Intent(context, com.example.system.MaxWakeService::class.java)
+        if (!enable) {
+            context.stopService(intent)
+            val msg = "Background Wake Listening OFF, Boss."
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+            return
+        }
+
+        // ROOT CAUSE of "notification hi nahi aati": on Android 14+, starting a foreground
+        // service with foregroundServiceType="microphone" throws a SecurityException the INSTANT
+        // RECORD_AUDIO is not granted — before the service's own onCreate/onStartCommand even
+        // runs, so no notification is ever created. Checking here first turns that silent crash
+        // into a clear spoken message and, if possible, the permission prompt.
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            val msg = "Microphone permission nahi hai, isliye wake service start nahi hui. Settings me MAX ko Microphone allow karo, phir dobara ON karo."
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            // The service's own notification would be silently hidden by the system without this.
+            val msg = "Notification permission nahi hai. Settings me MAX ko Notifications allow karo, warna wake status dikhega nahi."
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
+            return
+        }
+
         try {
-            if (enable) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
-                val msg = "Background Wake Listening ON! Say 'Max' anytime, Boss!"
-                _lastSpeechText.value = msg
-                voiceEngine.speak(msg)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
             } else {
-                context.stopService(intent)
-                val msg = "Background Wake Listening OFF, Boss."
-                _lastSpeechText.value = msg
-                voiceEngine.speak(msg)
+                context.startService(intent)
             }
+            val msg = "Background Wake Listening ON! Say 'Max' anytime, Boss!"
+            _lastSpeechText.value = msg
+            voiceEngine.speak(msg)
         } catch (e: Exception) {
-            val msg = "Could not start background service. Grant microphone permissions, Boss."
+            val msg = "Wake service start nahi hui (${e.javaClass.simpleName}). MAX app dobara kholkar try karo."
             _lastSpeechText.value = msg
             voiceEngine.speak(msg)
         }
