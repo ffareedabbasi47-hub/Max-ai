@@ -724,13 +724,12 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         voiceEngine.speak(msg)
     }
 
-    fun toggleBackgroundWakeService(context: android.content.Context, enable: Boolean) {
+    fun toggleBackgroundWakeService(context: android.content.Context, enable: Boolean, announce: Boolean = true) {
         val intent = android.content.Intent(context, com.example.system.MaxWakeService::class.java)
         if (!enable) {
             context.stopService(intent)
             val msg = "Background Wake Listening OFF, Boss."
-            _lastSpeechText.value = msg
-            voiceEngine.speak(msg)
+            if (announce) { _lastSpeechText.value = msg; voiceEngine.speak(msg) }
             return
         }
 
@@ -743,8 +742,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
             != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             val msg = "Microphone permission nahi hai, isliye wake service start nahi hui. Settings me MAX ko Microphone allow karo, phir dobara ON karo."
-            _lastSpeechText.value = msg
-            voiceEngine.speak(msg)
+            if (announce) { _lastSpeechText.value = msg; voiceEngine.speak(msg) }
             return
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
@@ -753,8 +751,7 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             // The service's own notification would be silently hidden by the system without this.
             val msg = "Notification permission nahi hai. Settings me MAX ko Notifications allow karo, warna wake status dikhega nahi."
-            _lastSpeechText.value = msg
-            voiceEngine.speak(msg)
+            if (announce) { _lastSpeechText.value = msg; voiceEngine.speak(msg) }
             return
         }
 
@@ -764,13 +761,14 @@ class MaxViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 context.startService(intent)
             }
-            val msg = "Background Wake Listening ON! Say 'Max' anytime, Boss!"
-            _lastSpeechText.value = msg
-            voiceEngine.speak(msg)
+            if (announce) {
+                val msg = "Background Wake Listening ON! Say 'Max' anytime, Boss!"
+                _lastSpeechText.value = msg
+                voiceEngine.speak(msg)
+            }
         } catch (e: Exception) {
             val msg = "Wake service start nahi hui (${e.javaClass.simpleName}). MAX app dobara kholkar try karo."
-            _lastSpeechText.value = msg
-            voiceEngine.speak(msg)
+            if (announce) { _lastSpeechText.value = msg; voiceEngine.speak(msg) }
         }
     }
 

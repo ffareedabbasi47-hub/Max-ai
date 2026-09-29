@@ -97,8 +97,9 @@ class MainActivity : ComponentActivity() {
 
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
-                ) { permissions ->
-                    // Checked permissions
+                ) { _ ->
+                    // Whatever was granted just now might be exactly what wake word was waiting for.
+                    maybeAutoStartWake(context, maxViewModel)
                 }
 
                 LaunchedEffect(Unit) {
@@ -107,6 +108,10 @@ class MainActivity : ComponentActivity() {
                     }
                     if (missing.isNotEmpty()) {
                         permissionLauncher.launch(missing.toTypedArray())
+                    } else {
+                        // Nothing to ask for — permissions were already granted earlier, so this is
+                        // the only place auto-start would otherwise be triggered from.
+                        maybeAutoStartWake(context, maxViewModel)
                     }
                 }
 
@@ -147,6 +152,25 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
+    }
+
+    /**
+     * Root-cause fix for "Settings shows wake word ACTIVE but it never actually starts": that
+     * label used to be a local UI boolean with no link to the real service, defaulting to true on
+     * every screen open. The service was never auto-started, so on a fresh app launch (or after
+     * the OS kills it) "Max"/"Hey Max" did nothing despite the screen claiming otherwise. This
+     * restarts the REAL service on launch if the user had it on and MAX actually has what it needs.
+     */
+    private fun maybeAutoStartWake(context: Context, viewModel: MaxViewModel) {
+        val prefs = context.getSharedPreferences("max_jarvis_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("wake_service_enabled", false)) return
+        val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val hasNotif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (hasMic && hasNotif) viewModel.toggleBackgroundWakeService(context, true, announce = false)
+        // If permission is still missing, stay quiet here — the Settings screen's real-time
+        // status (WakeStatus) tells the user why the moment they open it, instead of an
+        // unexplained failure sound on every app launch.
     }
 
     private fun handleIntent(intent: Intent) {

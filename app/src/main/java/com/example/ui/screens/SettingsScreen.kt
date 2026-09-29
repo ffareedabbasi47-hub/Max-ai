@@ -22,6 +22,7 @@ import com.example.BuildConfig
 import com.example.data.api.diagnostics.GeminiDiagnosticResult
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MaxViewModel
+import com.example.wake.WakeStatus
 
 @Composable
 fun SettingsScreen(
@@ -34,7 +35,14 @@ fun SettingsScreen(
 
     var pitch by remember { mutableFloatStateOf(0.85f) }
     var speed by remember { mutableFloatStateOf(1.05f) }
-    var wakeWordEnabled by remember { mutableStateOf(true) }
+    // ROOT CAUSE of "wake word ACTIVE dikhta hai par kaam nahi karta": this used to be
+    // `remember { mutableStateOf(true) }` — a fake label with no link to MaxWakeService, so it
+    // showed "ACTIVE" the moment Settings opened even though the service was never started, and
+    // reset to that same lie every time the screen recomposed. It now reflects what actually
+    // happened last (persisted) and shows the wake engine's REAL status live.
+    val prefs = remember { context.getSharedPreferences("max_jarvis_prefs", android.content.Context.MODE_PRIVATE) }
+    var wakeWordEnabled by remember { mutableStateOf(prefs.getBoolean("wake_service_enabled", false)) }
+    val wakeStatusText by WakeStatus.text.collectAsStateWithLifecycle()
     var autoReplyEnabled by remember { mutableStateOf(true) }
 
     val hasGeminiKey = BuildConfig.GEMINI_API_KEY.isNotBlank() && BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
@@ -510,7 +518,8 @@ fun SettingsScreen(
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Status: ${if (wakeWordEnabled) "ACTIVE (Listening in background)" else "PAUSED"}",
+                            // Real status from the running (or not running) service — not a guess.
+                            text = if (wakeWordEnabled) wakeStatusText else "PAUSED",
                             color = if (wakeWordEnabled) NeonGreenStatus else NeonAmberAlert,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
@@ -520,6 +529,7 @@ fun SettingsScreen(
                         checked = wakeWordEnabled,
                         onCheckedChange = {
                             wakeWordEnabled = it
+                            prefs.edit().putBoolean("wake_service_enabled", it).apply()
                             viewModel.toggleBackgroundWakeService(context, it)
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary)
@@ -582,6 +592,7 @@ fun SettingsScreen(
                         onCheckedChange = {
                             liveModeEnabled = it
                             wakeWordEnabled = false // the two background listeners can't both hold the mic
+                            prefs.edit().putBoolean("wake_service_enabled", false).apply()
                             viewModel.toggleLiveMode(context, it)
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFE040FB))
